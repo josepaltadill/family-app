@@ -1,0 +1,30 @@
+proyecto: manteniment-vehicles
+idioma: es
+almacen_artefactos: both
+sdd:
+  modo: interactivo
+  estrategia_pr: auto-forecast
+  presupuesto_revision_lineas_cambiadas: 400
+calidad:
+  tdd_estricto: true
+  comando_tests: "npm test"
+convenciones:
+  prefijo_tablas_supabase: "mv_"
+  idioma_codigo: es
+  idioma_documentacion: es
+notas:
+  - "Aplicación privada para el control de mantenimientos de vehículos."
+  - "Los artefactos se guardan en OpenSpec y se reflejan en Engram cuando sea relevante."
+  - "El proyecto usará nombres, comentarios y documentación en español por preferencia explícita del usuario."
+contexto_derivado:
+  estado_repositorio: "greenfield; todavía no hay stack de aplicación definido"
+  artefactos_existentes:
+    - "openspec/changes/vehicle-maintenance-app/propuesta.md"
+  git: "no inicializado en este directorio"
+reglas_fases:
+  propuesta: "mantener el alcance del MVP privado familiar y documentar decisiones pendientes"
+  especificacion: "derivar criterios verificables desde la propuesta sin ampliar alcance"
+  diseno: "separar dominio, persistencia, interfaz y autenticación futura"
+  tareas: "planificar cortes revisables respetando el presupuesto de 400 líneas cambiadas"
+  aplicacion: "usar TDD estricto cuando exista el runner configurado; no degradar a modo estándar sin decisión explícita"
+  verificacion: "validar contra criterios de aceptación y registrar evidencia"
