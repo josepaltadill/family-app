@@ -325,3 +325,296 @@ VSCode marcó el error TypeScript `ts(2673)`: `crearVehiculo` intentaba llamar a
 
 - `npm test` → pasó: 2 archivos, 10 tests.
 - `npm run build` → pasó; TypeScript ya no reporta el error del constructor privado.
+
+## Dominio de eventos, vencimientos y roles — PR 1 slice
+
+### Estado estructurado consumido/producido
+
+- Proyecto: `manteniment-vehicles`
+- Cambio activo: `vehicle-maintenance-app`
+- Artifact store: `both`; OpenSpec autoritativo y Engram disponible para sincronización.
+- Modo: interactivo.
+- Estrategia de entrega: `auto-chain`.
+- Chain strategy: `stacked-to-main`.
+- Límite del corte actual: dominio de eventos, vencimientos y roles solamente.
+- TDD estricto: activo; comando de tests `npm test`; build requerido `npm run build`.
+- Riesgo de presupuesto: el cambio completo es alto, pero este corte se mantuvo en la sección 3 y no inició casos de uso, Supabase, migraciones, server actions ni UI.
+
+### Tareas completadas y checkboxes persistidos
+
+- [x] RED: crear pruebas en `src/modulos/vehiculos/dominio/evento-vehiculo.test.ts`, `vencimiento.test.ts` y `rol-usuario.test.ts` para mantenimiento, avería, coste opcional, evento histórico, vencimiento por km, vencimiento por fecha, sin vencimiento y roles `admin`/`editor`.
+- [x] GREEN: implementar `evento-vehiculo.ts`, `vencimiento.ts` y `rol-usuario.ts`.
+- [x] TRIANGULATE: probar evento con solo vencimiento por km, solo por fecha y ambos.
+- [x] REFACTOR: extraer tipos/value objects solo si reducen duplicación real.
+
+Confirmación al cierre: se releyó `openspec/changes/vehicle-maintenance-app/tasks.md` y las cuatro líneas del apartado 3 están marcadas como `- [x]`.
+
+### TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 3.1 Eventos de vehículo | `src/modulos/vehiculos/dominio/evento-vehiculo.test.ts` | Unit/domain | ✅ Suite previa verde por contexto; este corte empezó escribiendo tests nuevos | ✅ `npm test -- src/modulos/vehiculos/dominio/evento-vehiculo.test.ts src/modulos/vehiculos/dominio/vencimiento.test.ts src/modulos/vehiculos/dominio/rol-usuario.test.ts` falló por módulos inexistentes | ✅ Implementado `EventoVehiculo` con mantenimiento, avería, coste opcional y decisión de actualización de kilometraje; pase focalizado 14/14 | ✅ Añadidos casos de solo vencimiento por km, solo por fecha y ambos dentro del corte | ✅ Sin value objects extra porque no había duplicación real; fechas expuestas con copias defensivas |
+| 3.2 Vencimientos | `src/modulos/vehiculos/dominio/vencimiento.test.ts` | Unit/domain | ✅ Mismo RED conjunto del corte | ✅ Falló por módulo inexistente `vencimiento` | ✅ `evaluarVencimiento` devuelve `sin_vencimiento`, `pendiente` o `vencido` según km/fecha | ✅ Cubiertos km, fecha, ambas condiciones y ninguna condición | ✅ Función pura sin imports de framework |
+| 3.3 Roles de usuario | `src/modulos/vehiculos/dominio/rol-usuario.test.ts` | Unit/domain | ✅ Mismo RED conjunto del corte | ✅ Falló por módulo inexistente `rol-usuario` | ✅ `rolesUsuario` y `esRolUsuario` reconocen `admin` y `editor` | ✅ Se añadió rechazo de rol fuera del dominio inicial | ✅ Tipo literal mínimo; sin permisos aplicados todavía |
+
+### Comandos ejecutados
+
+- `npm test -- src/modulos/vehiculos/dominio/evento-vehiculo.test.ts src/modulos/vehiculos/dominio/vencimiento.test.ts src/modulos/vehiculos/dominio/rol-usuario.test.ts` → RED esperado: fallaron 3 suites por módulos inexistentes.
+- `npm test -- src/modulos/vehiculos/dominio/evento-vehiculo.test.ts src/modulos/vehiculos/dominio/vencimiento.test.ts src/modulos/vehiculos/dominio/rol-usuario.test.ts` → GREEN/TRIANGULATE: 3 archivos, 14 tests pasados.
+- `npm test` → suite completa: 5 archivos, 24 tests pasados.
+- `grep` sobre `src/modulos/vehiculos/dominio` y `src/compartido/dominio` para imports de Next.js, React, Supabase, Zod y Tailwind → sin coincidencias.
+- `npm run build` → pasó con Next.js 16.2.10.
+
+### Archivos cambiados
+
+- `src/modulos/vehiculos/dominio/evento-vehiculo.test.ts`
+- `src/modulos/vehiculos/dominio/evento-vehiculo.ts`
+- `src/modulos/vehiculos/dominio/vencimiento.test.ts`
+- `src/modulos/vehiculos/dominio/vencimiento.ts`
+- `src/modulos/vehiculos/dominio/rol-usuario.test.ts`
+- `src/modulos/vehiculos/dominio/rol-usuario.ts`
+- `openspec/changes/vehicle-maintenance-app/tasks.md`
+- `openspec/changes/vehicle-maintenance-app/apply-progress.md`
+
+### Desviaciones del diseño
+
+- Sin desviaciones relevantes para este corte. El dominio sigue sin importar Next.js, React, Supabase, Zod ni Tailwind.
+- `EventoVehiculo` incorpora una decisión pura `debeActualizarKilometrajeActual(kilometrosActuales)` para expresar la regla de evento histórico/más reciente sin implementar aún casos de uso ni persistencia.
+- No se implementaron casos de uso, puertos, repositorios en memoria, Supabase, migraciones, server actions ni UI por límite explícito del slice.
+
+### Riesgos / notas
+
+- La validación de campos obligatorios de evento en frontera de entrada queda para Zod/server actions posteriores; este corte solo modela reglas mínimas de dominio del evento.
+- La atomicidad evento + actualización de kilometraje sigue pendiente para la sección 7; aquí solo se modeló la decisión pura que consumirá el caso de uso.
+- Los roles son concepto de dominio, no autorización aplicada; permisos reales quedan fuera de este corte.
+
+### Tareas restantes
+
+Siguiente bloque pendiente exacto:
+
+- [ ] RED: crear pruebas en `src/modulos/vehiculos/aplicacion/casos-uso/*.test.ts` para registrar/listar vehículo, rechazar matrícula duplicada global, desactivar sin borrar eventos, registrar evento actualizando kilometraje, registrar evento histórico sin bajarlo y corregir kilometraje.
+- [ ] GREEN: implementar casos de uso en `src/modulos/vehiculos/aplicacion/casos-uso/` y puertos en `src/modulos/vehiculos/aplicacion/puertos/`.
+- [ ] GREEN: definir en `repositorio-vehiculos.ts` una operación de unicidad global, por ejemplo `existeMatricula(matricula: string): Promise<boolean>`; no usar solo `existeMatriculaActiva`.
+- [ ] GREEN: definir un puerto/contrato atómico para `registrarEventoYActualizarKilometraje` o unidad de trabajo equivalente, consumido por `registrar-evento-vehiculo.ts`.
+- [ ] GREEN: crear repositorios en memoria para pruebas en `src/modulos/vehiculos/aplicacion/pruebas/`.
+- [ ] REFACTOR: asegurar que los casos de uso reciben `ProveedorIdentidad`/actor temporal sin aplicar matriz de permisos real.
+
+### Workload / PR boundary
+
+- PR boundary actual: dominio de eventos, vencimientos y roles solamente.
+- Estrategia: `auto-chain`, `stacked-to-main`.
+- No se hizo commit ni se abrió PR.
+
+## Remediación de revisión fresca — dominio de eventos, vencimientos y roles
+
+### Estado estructurado consumido/producido
+
+- Proyecto: `manteniment-vehicles`
+- Cambio activo: `vehicle-maintenance-app`
+- Artifact store: `both`; OpenSpec autoritativo y Engram se intentó sincronizar.
+- Modo: corte delegado de remediación de revisión fresca.
+- Estrategia de entrega vigente: `auto-chain`, `stacked-to-main`.
+- Límite del corte: solo dominio de eventos, vencimientos y roles; no se implementaron casos de uso, Supabase, migraciones, server actions ni UI.
+- TDD estricto: activo; comando de tests `npm test`; build requerido `npm run build`.
+
+### Hallazgos resueltos
+
+- [x] Eventos: añadida cobertura explícita para igualdad de kilometraje evento/actual como frontera histórica/no actualizable.
+- [x] Eventos: añadida cobertura para kilometraje de evento negativo, kilometraje actual negativo, próximo vencimiento por km negativo y coste negativo.
+- [x] Eventos: añadida cobertura defensiva para fechas expuestas por `EventoVehiculo.fecha`, `proximoVencimientoFecha` y `fechaCreacion`.
+- [x] Vencimientos: añadida cobertura de fronteras justo por debajo del umbral de km y justo antes del umbral de fecha.
+
+### TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| Remediar contratos visibles de eventos | `src/modulos/vehiculos/dominio/evento-vehiculo.test.ts` | Unit/domain | ✅ `npm test -- src/modulos/vehiculos/dominio/evento-vehiculo.test.ts src/modulos/vehiculos/dominio/vencimiento.test.ts src/modulos/vehiculos/dominio/rol-usuario.test.ts`: 14/14 | ⚠️ Pruebas de regresión añadidas primero; pasaron porque la implementación ya protegía estos contratos visibles | ✅ Pase focalizado final: 22/22 | ✅ Cubiertas fronteras de igualdad, negativos y copias defensivas de tres fechas | ➖ Sin cambio productivo necesario |
+| Remediar fronteras justo por debajo de vencimiento | `src/modulos/vehiculos/dominio/vencimiento.test.ts` | Unit/domain | ✅ Misma safety net del corte: 14/14 | ⚠️ Pruebas de regresión añadidas primero; pasaron porque la implementación ya usaba `>=` correctamente | ✅ Pase focalizado final: 22/22 | ✅ Cubiertas frontera km `129999/130000` y fecha 1 ms antes del objetivo | ➖ Sin cambio productivo necesario |
+
+### Comandos ejecutados
+
+- `npm test -- src/modulos/vehiculos/dominio/evento-vehiculo.test.ts src/modulos/vehiculos/dominio/vencimiento.test.ts src/modulos/vehiculos/dominio/rol-usuario.test.ts` → safety net inicial: 3 archivos, 14 tests pasados.
+- `npm test -- src/modulos/vehiculos/dominio/evento-vehiculo.test.ts src/modulos/vehiculos/dominio/vencimiento.test.ts src/modulos/vehiculos/dominio/rol-usuario.test.ts` → remediación focalizada: 3 archivos, 22 tests pasados.
+- `npm test` → suite completa: 5 archivos, 32 tests pasados.
+- `npm run build` → pasó con Next.js 16.2.10.
+
+### Archivos cambiados
+
+- `src/modulos/vehiculos/dominio/evento-vehiculo.test.ts`
+- `src/modulos/vehiculos/dominio/vencimiento.test.ts`
+- `openspec/changes/vehicle-maintenance-app/apply-progress.md`
+
+### Desviaciones del diseño
+
+- Sin desviaciones. La remediación solo amplía cobertura de pruebas sobre contratos ya implementados.
+- No se modificó implementación porque las invariantes y copias defensivas ya existían.
+- No se implementaron casos de uso, Supabase, migraciones, server actions ni UI.
+
+### Tareas restantes
+
+Siguiente bloque pendiente exacto:
+
+- [ ] RED: crear pruebas en `src/modulos/vehiculos/aplicacion/casos-uso/*.test.ts` para registrar/listar vehículo, rechazar matrícula duplicada global, desactivar sin borrar eventos, registrar evento actualizando kilometraje, registrar evento histórico sin bajarlo y corregir kilometraje.
+- [ ] GREEN: implementar casos de uso en `src/modulos/vehiculos/aplicacion/casos-uso/` y puertos en `src/modulos/vehiculos/aplicacion/puertos/`.
+- [ ] GREEN: definir en `repositorio-vehiculos.ts` una operación de unicidad global, por ejemplo `existeMatricula(matricula: string): Promise<boolean>`; no usar solo `existeMatriculaActiva`.
+- [ ] GREEN: definir un puerto/contrato atómico para `registrarEventoYActualizarKilometraje` o unidad de trabajo equivalente, consumido por `registrar-evento-vehiculo.ts`.
+- [ ] GREEN: crear repositorios en memoria para pruebas en `src/modulos/vehiculos/aplicacion/pruebas/`.
+- [ ] REFACTOR: asegurar que los casos de uso reciben `ProveedorIdentidad`/actor temporal sin aplicar matriz de permisos real.
+
+### Workload / PR boundary
+
+- PR boundary actual: remediación de revisión fresca para dominio de eventos, vencimientos y roles solamente.
+- Estrategia: `auto-chain`, `stacked-to-main`.
+- No se hizo commit ni se abrió PR.
+
+## Casos de uso con puertos en memoria — PR 1 slice
+
+### Estado estructurado consumido/producido
+
+- Proyecto: `manteniment-vehicles`
+- Cambio activo: `vehicle-maintenance-app`
+- Artifact store: `both`; OpenSpec autoritativo y Engram leído/sincronizado cuando estuvo disponible.
+- Modo: interactivo.
+- Estrategia de entrega: `auto-chain`.
+- Chain strategy: `stacked-to-main`.
+- Límite del corte actual: casos de uso de aplicación, puertos y repositorios en memoria solamente.
+- TDD estricto: activo; comando de tests `npm test`; build requerido `npm run build`.
+- Riesgo de presupuesto: el cambio completo es alto; este corte se mantuvo en la sección 4 y no inició Supabase, migraciones, server actions ni UI.
+
+### Tareas completadas y checkboxes persistidos
+
+- [x] RED: crear pruebas en `src/modulos/vehiculos/aplicacion/casos-uso/*.test.ts` para registrar/listar vehículo, rechazar matrícula duplicada global, desactivar sin borrar eventos, registrar evento actualizando kilometraje, registrar evento histórico sin bajarlo y corregir kilometraje.
+- [x] GREEN: implementar casos de uso en `src/modulos/vehiculos/aplicacion/casos-uso/` y puertos en `src/modulos/vehiculos/aplicacion/puertos/`.
+- [x] GREEN: definir en `repositorio-vehiculos.ts` una operación de unicidad global, por ejemplo `existeMatricula(matricula: string): Promise<boolean>`; no usar solo `existeMatriculaActiva`.
+- [x] GREEN: definir un puerto/contrato atómico para `registrarEventoYActualizarKilometraje` o unidad de trabajo equivalente, consumido por `registrar-evento-vehiculo.ts`.
+- [x] GREEN: crear repositorios en memoria para pruebas en `src/modulos/vehiculos/aplicacion/pruebas/`.
+- [x] REFACTOR: asegurar que los casos de uso reciben `ProveedorIdentidad`/actor temporal sin aplicar matriz de permisos real.
+
+### TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 4.1 Casos de uso de aplicación | `src/modulos/vehiculos/aplicacion/casos-uso/vehiculos-casos-uso.test.ts` | Application | ✅ Suite previa disponible por contexto; este corte empezó escribiendo pruebas nuevas | ✅ `npm test -- src/modulos/vehiculos/aplicacion/casos-uso/vehiculos-casos-uso.test.ts` falló por módulos de casos de uso inexistentes | ✅ Implementados `registrarVehiculo`, `listarVehiculos`, `desactivarVehiculo`, `registrarEventoVehiculo` y `corregirKilometraje`; pase focalizado 6/6 | ✅ Cubiertos duplicado global tras desactivación, evento con km mayor, evento histórico y corrección arriba/abajo | ✅ Los casos de uso consumen `ProveedorIdentidadTemporal`/actor sin aplicar matriz real de permisos |
+| 4.2 Puertos y memoria | `vehiculos-casos-uso.test.ts` | Ports/adapters in memory | ✅ Pruebas de aplicación describen contrato observable | ✅ Falló por ausencia de puertos y repositorios en memoria | ✅ Creados `RepositorioVehiculos`, `RepositorioEventosVehiculo`, `UnidadTrabajoVehiculos`, `ProveedorFecha` y `ProveedorIdentidad`; memoria verde | ✅ `existeMatricula` verifica unicidad global, no solo activa; `registrarEventoYActualizarKilometraje` coordina evento + km | ✅ Sin imports de Next.js, React, Supabase, Zod ni Tailwind en dominio/aplicación/compartido |
+
+### Comandos ejecutados
+
+- `npm test -- src/modulos/vehiculos/aplicacion/casos-uso/vehiculos-casos-uso.test.ts` → RED esperado: falló por módulo inexistente `./corregir-kilometraje`.
+- `npm test -- src/modulos/vehiculos/aplicacion/casos-uso/vehiculos-casos-uso.test.ts` → GREEN/TRIANGULATE: 1 archivo, 6 tests pasados.
+- `npm test` → suite completa: 6 archivos, 38 tests pasados.
+- `npm run build` → pasó con Next.js 16.2.10.
+- `grep` sobre `src/modulos/vehiculos/dominio`, `src/modulos/vehiculos/aplicacion` y `src/compartido/dominio` para imports de Next.js, React, Supabase, Zod y Tailwind → sin coincidencias.
+
+### Archivos cambiados
+
+- `src/modulos/vehiculos/aplicacion/casos-uso/vehiculos-casos-uso.test.ts`
+- `src/modulos/vehiculos/aplicacion/casos-uso/registrar-vehiculo.ts`
+- `src/modulos/vehiculos/aplicacion/casos-uso/listar-vehiculos.ts`
+- `src/modulos/vehiculos/aplicacion/casos-uso/desactivar-vehiculo.ts`
+- `src/modulos/vehiculos/aplicacion/casos-uso/registrar-evento-vehiculo.ts`
+- `src/modulos/vehiculos/aplicacion/casos-uso/corregir-kilometraje.ts`
+- `src/modulos/vehiculos/aplicacion/puertos/repositorio-vehiculos.ts`
+- `src/modulos/vehiculos/aplicacion/puertos/repositorio-eventos-vehiculo.ts`
+- `src/modulos/vehiculos/aplicacion/puertos/proveedor-fecha.ts`
+- `src/modulos/vehiculos/aplicacion/puertos/proveedor-identidad.ts`
+- `src/modulos/vehiculos/aplicacion/pruebas/repositorio-vehiculos-en-memoria.ts`
+- `src/modulos/vehiculos/aplicacion/pruebas/repositorio-eventos-vehiculo-en-memoria.ts`
+- `src/modulos/vehiculos/aplicacion/pruebas/proveedor-identidad-temporal.ts`
+- `openspec/changes/vehicle-maintenance-app/tasks.md`
+- `openspec/changes/vehicle-maintenance-app/apply-progress.md`
+
+### Desviaciones del diseño
+
+- El puerto atómico se nombró `UnidadTrabajoVehiculos` y expone `registrarEventoYActualizarKilometraje({ evento, vehiculoActualizado })`; el adaptador en memoria lo implementa para pruebas. La implementación Supabase/transaccional real queda para PR 2/sección 7.
+- `ProveedorIdentidadTemporal` vive en `aplicacion/pruebas/` para este corte y devuelve actor `admin` fijo; no se aplican permisos reales, tal como pide el diseño.
+- No se implementaron Supabase, migraciones, server actions, UI, RLS, auth real, OCR, IA, adjuntos, notificaciones ni dashboard.
+
+### Riesgos / notas
+
+- La operación en memoria coordina evento + kilometraje en un único método, pero no sustituye la transacción/RPC de Supabase pendiente en PR 2.
+- La validación de campos obligatorios y mensajes de formularios queda para Zod/server actions de PR 3; los casos de uso asumen entradas ya tipadas y delegan invariantes al dominio.
+- La unicidad global de matrícula se verifica en el caso de uso mediante `existeMatricula`; la restricción definitiva de base de datos queda para migraciones `mv_*`.
+
+### Tareas restantes
+
+Siguiente bloque pendiente exacto:
+
+- [ ] RED: documentar/crear prueba de contrato SQL o snapshot en `supabase/migrations/*.test.ts` si el harness lo permite; si no, añadir checklist verificable en `supabase/migrations/README.md`.
+- [ ] GREEN: crear migración en `supabase/migrations/` para `mv_vehiculos` y `mv_eventos_vehiculo` con checks, claves foráneas e índices.
+- [ ] GREEN: imponer unicidad global de `mv_vehiculos.matricula`, incluyendo vehículos inactivos.
+- [ ] GREEN: incluir prefijo `mv_` en todos los objetos SQL de esta app.
+- [ ] REFACTOR: no crear tablas futuras de adjuntos/OCR/manuales; solo reservar nombres en documentación si hace falta.
+
+### Workload / PR boundary
+
+- PR boundary actual: casos de uso de aplicación + puertos + repositorios en memoria.
+- Estrategia: `auto-chain`, `stacked-to-main`.
+- No se hizo commit ni se abrió PR.
+
+### Verificación post-ajuste de presupuesto
+
+- Se compactó `vehiculos-casos-uso.test.ts` para mantener el corte de aplicación por debajo del presupuesto de revisión de 400 líneas de código de aplicación nuevas.
+- Líneas en `src/modulos/vehiculos/aplicacion/`: 384 total.
+- `npm test -- src/modulos/vehiculos/aplicacion/casos-uso/vehiculos-casos-uso.test.ts` → pasó: 1 archivo, 6 tests.
+- `npm test` → pasó: 6 archivos, 38 tests.
+- `npm run build` → pasó con Next.js 16.2.10.
+
+## Remediación de revisión fresca — R3-001 unidad de trabajo en memoria
+
+### Estado estructurado consumido/producido
+
+- Proyecto: `manteniment-vehicles`
+- Cambio activo: `vehicle-maintenance-app`
+- Artifact store: `both`; OpenSpec autoritativo y Engram sincronizado al cierre.
+- Modo: corte delegado de remediación de revisión fresca.
+- Estrategia de entrega vigente: `auto-chain`, `stacked-to-main`.
+- Límite del corte: solo sección 4 de aplicación/puertos/repositorios en memoria; no se implementaron Supabase, migraciones, server actions ni UI.
+- TDD estricto: activo; comando de tests `npm test`; build requerido `npm run build`.
+
+### Hallazgo resuelto
+
+- [x] R3-001: añadida prueba determinista de fallo parcial para `registrarEventoYActualizarKilometraje`; si falla la persistencia del kilometraje del vehículo, el evento no queda guardado en el repositorio en memoria y el kilometraje original se conserva.
+- [x] El puerto `UnidadTrabajoVehiculos` documenta explícitamente que las implementaciones no deben confirmar un evento si falla la persistencia del kilometraje.
+- [x] La implementación en memoria persiste primero el vehículo actualizado cuando corresponde y solo después confirma el evento en memoria, evitando estado parcial en este slice.
+
+### TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| R3-001 atomicidad en memoria evento + kilometraje | `src/modulos/vehiculos/aplicacion/casos-uso/vehiculos-casos-uso.test.ts` | Application/adapter in memory | ✅ Suite previa de aplicación existente | ✅ `npm test -- src/modulos/vehiculos/aplicacion/casos-uso/vehiculos-casos-uso.test.ts` falló: el evento quedaba guardado cuando `guardar(vehiculo)` fallaba | ✅ Reordenada la confirmación en `RepositorioEventosVehiculoEnMemoria`: primero guarda vehículo actualizado y luego confirma evento; test focalizado 7/7 | ✅ La suite mantiene los casos de evento más reciente e histórico sin bajar kilometraje | ✅ Comentario mínimo en `UnidadTrabajoVehiculos` aclara el contrato para futura RPC/transacción Supabase |
+
+### Comandos ejecutados
+
+- `npm test -- src/modulos/vehiculos/aplicacion/casos-uso/vehiculos-casos-uso.test.ts` → RED esperado: 1 fallo; el evento quedaba guardado tras fallar la actualización de kilometraje.
+- `npm test -- src/modulos/vehiculos/aplicacion/casos-uso/vehiculos-casos-uso.test.ts` → GREEN: 1 archivo, 7 tests pasados.
+- `npm test` → suite completa: 6 archivos, 39 tests pasados.
+- `npm run build` → pasó con Next.js 16.2.10.
+
+### Archivos cambiados
+
+- `src/modulos/vehiculos/aplicacion/casos-uso/vehiculos-casos-uso.test.ts`
+- `src/modulos/vehiculos/aplicacion/pruebas/repositorio-eventos-vehiculo-en-memoria.ts`
+- `src/modulos/vehiculos/aplicacion/puertos/repositorio-eventos-vehiculo.ts`
+- `openspec/changes/vehicle-maintenance-app/apply-progress.md`
+
+### Desviaciones del diseño
+
+- Sin desviaciones. La remediación mantiene el contrato coordinado de aplicación y deja la implementación transaccional real para Supabase/RPC en PR 2.
+- No se implementaron Supabase, migraciones, server actions, interfaz, RLS ni auth.
+- No se modificó `tasks.md` porque la sección 4 ya estaba completada y persistida; este corte añade evidencia de remediación posterior sobre el mismo slice.
+
+### Tareas restantes
+
+Siguiente bloque pendiente exacto:
+
+- [ ] RED: documentar/crear prueba de contrato SQL o snapshot en `supabase/migrations/*.test.ts` si el harness lo permite; si no, añadir checklist verificable en `supabase/migrations/README.md`.
+- [ ] GREEN: crear migración en `supabase/migrations/` para `mv_vehiculos` y `mv_eventos_vehiculo` con checks, claves foráneas e índices.
+- [ ] GREEN: imponer unicidad global de `mv_vehiculos.matricula`, incluyendo vehículos inactivos.
+- [ ] GREEN: incluir prefijo `mv_` en todos los objetos SQL de esta app.
+- [ ] REFACTOR: no crear tablas futuras de adjuntos/OCR/manuales; solo reservar nombres en documentación si hace falta.
+
+### Workload / PR boundary
+
+- PR boundary actual: remediación R3-001 para use-case/in-memory repository slice solamente.
+- Estrategia: `auto-chain`, `stacked-to-main`.
+- No se hizo commit ni se abrió PR.
