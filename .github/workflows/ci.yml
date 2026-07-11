@@ -39,7 +39,9 @@ jobs:
       # in local dev) is what actually reproduces the schema correctly.
       # Deferred until after the cheaper type-check/build steps so a failure
       # there doesn't pay for spinning up the Docker-based stack first.
-      - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
+      - name: Setup Supabase CLI
+        id: setup-cli
+        uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
         with:
           version: latest
 
@@ -51,10 +53,14 @@ jobs:
         env:
           SUPABASE_BOOTSTRAP_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
 
+      # Guarded on the CLI setup step having actually run: if type-check/build
+      # fails before this point, `supabase` was never installed, and these
+      # cleanup steps would otherwise fail with "command not found" instead
+      # of just being skipped.
       - name: Dump Supabase stack status on failure
-        if: failure()
+        if: failure() && steps.setup-cli.outcome == 'success'
         run: supabase status
 
       - name: Stop local Supabase stack
-        if: always()
+        if: always() && steps.setup-cli.outcome == 'success'
         run: supabase stop
