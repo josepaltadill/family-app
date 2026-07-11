@@ -36,8 +36,13 @@ const CARACTERES_ESPACIO_SQL = "E' \\t\\n\\r'";
  * El `import 'server-only'` de arriba solo hace fallar el build si este módulo se
  * bundlea para un Client Component; no impide que una Server Action u otra ruta de
  * servidor lo importe indebidamente, ya que ambas comparten el mismo grafo de
- * compilación server-side. Ver issue de seguimiento sobre limitar quién puede
- * importar este módulo.
+ * compilación server-side. La protección real contra eso es la allowlist en
+ * `seguridad-servidor.ts` (`detectarImportadoresNoPermitidosDeBootstrap`):
+ * solo `operaciones-bootstrap-postgres.ts` (a sí mismo) y `scripts/bootstrap-admin.ts`
+ * pueden importar este módulo; el test falla si aparece un import estático o
+ * dinámico (`import()`/`require()`) desde cualquier otro archivo. No cubre un
+ * re-export vía barrel ni un alias de `tsconfig.json` que renombre el
+ * specifier sin conservar el nombre del módulo.
  */
 export class OperacionesBootstrapPostgres implements OperacionesBootstrap {
   constructor(private readonly cliente: ClientePostgresBootstrap) {}
@@ -48,6 +53,33 @@ export class OperacionesBootstrapPostgres implements OperacionesBootstrap {
     );
   }
 
+  /**
+   * Inserta directamente en `auth.users` (esquema interno de GoTrue/Supabase
+   * Auth, no versionado por nuestras migraciones) en vez de usar la Admin API,
+   * porque este bootstrap corre fuera de cualquier request HTTP y ya tiene una
+   * conexión Postgres administrativa; pasar por la Admin API implicaría además
+   * manejar la clave `service_role`, descartada para esta app (ver comentario
+   * de módulo). Columnas:
+   * - `instance_id`/`aud`/`role`: constantes fijas que GoTrue espera para un
+   *   usuario single-tenant estándar (`instance_id` cero, `aud`/`role`
+   *   `'authenticated'`).
+   * - `encrypted_password`: hasheada con `pgcrypto` (`extensions.crypt` +
+   *   `gen_salt('bf')`), el mismo esquema bcrypt que usa GoTrue.
+   * - `confirmation_token`/`recovery_token`/`email_change_token_new`/
+   *   `email_change`: GoTrue los requiere `not null`; `''` los deja "sin
+   *   token pendiente" para un usuario ya confirmado (`email_confirmed_at`).
+   *
+   * `on conflict (email) where is_sso_user = false` apunta al índice único
+   * parcial real `users_email_partial_key` de GoTrue (verificado con `\d
+   * auth.users` contra GoTrue v2.192.0 vía `supabase start`; SSO no se usa en
+   * esta app). Es una dependencia de un esquema interno no versionado por
+   * este repo: si una futura versión de GoTrue renombra o cambia ese índice,
+   * este `on conflict` dejaría de resolver conflictos silenciosamente (el
+   * insert fallaría con "no unique or exclusion constraint matching" en vez
+   * de actualizar). El test de integración
+   * `crearUsuario resuelve un email duplicado...` ejercita este path contra
+   * Postgres real y fallaría de inmediato si el índice cambiara.
+   */
   async crearUsuario(email: string, password: string): Promise<FilaId> {
     const usuario = await primeraFila<FilaId>(
       this.cliente.query(

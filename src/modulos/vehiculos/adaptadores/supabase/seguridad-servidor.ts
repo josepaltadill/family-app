@@ -87,3 +87,53 @@ export function detectarModulosBootstrapSinServerOnly(archivos: readonly string[
     .filter((archivo) => MODULOS_BOOTSTRAP_ADMIN.some((nombre) => archivo.endsWith(nombre)))
     .filter((archivo) => !IMPORT_SERVER_ONLY.test(readFileSync(archivo, 'utf8')));
 }
+
+// `server-only` (arriba) no protege contra un import desde una Server Action u
+// otra ruta de servidor: comparten el mismo grafo de compilación donde ese
+// paquete es un no-op. Esta allowlist es el chequeo real de "quién puede
+// importar el bootstrap administrativo": si aparece un importador no listado,
+// falla en vez de depender de que nadie lo importe mal por accidente.
+//
+// Matchea por RUTA relativa completa (no solo nombre de archivo): un archivo
+// distinto que por casualidad comparta nombre base con el runner real no debe
+// quedar permitido solo por eso.
+const IMPORTADORES_PERMITIDOS_DE_BOOTSTRAP = [
+  'src/modulos/vehiculos/adaptadores/supabase/operaciones-bootstrap-postgres.ts', // usa bootstrap-servidor.ts internamente
+  'scripts/bootstrap-admin.ts', // el único runner real (issue #8)
+];
+
+// Cubre `import ... from '...'`/`export ... from '...'` (estático) y
+// `import('...')`/`require('...')` (dinámico): un import dinámico o un
+// `require` de estos módulos es tan indebido como uno estático, y ya se usa
+// `await import(...)` en este mismo módulo administrativo (ver
+// `crearOperacionesBootstrapPostgres`), así que no es un caso hipotético.
+const IMPORT_DINAMICO_O_REQUIRE = /\b(?:import|require)\s*\(\s*['"]([^'"]+)['"]/g;
+
+function especificadoresBootstrap(contenido: string): string[] {
+  const especificadores: string[] = [];
+  for (const coincidencia of contenido.matchAll(IMPORT_ESPECIFICADOR)) {
+    especificadores.push(coincidencia[1] ?? '');
+  }
+  for (const coincidencia of contenido.matchAll(IMPORT_DINAMICO_O_REQUIRE)) {
+    especificadores.push(coincidencia[1] ?? '');
+  }
+  return especificadores;
+}
+
+function importaModuloBootstrap(especificadores: readonly string[]): boolean {
+  return especificadores.some(
+    (especificador) =>
+      especificador.endsWith('/operaciones-bootstrap-postgres') || especificador.endsWith('/bootstrap-servidor'),
+  );
+}
+
+export function detectarImportadorNoPermitidoDeBootstrap(archivo: string, contenido: string): boolean {
+  if (IMPORTADORES_PERMITIDOS_DE_BOOTSTRAP.some((sufijo) => archivo.endsWith(sufijo))) return false;
+  if (MODULOS_BOOTSTRAP_ADMIN.some((nombre) => archivo.endsWith(nombre))) return false;
+
+  return importaModuloBootstrap(especificadoresBootstrap(contenido));
+}
+
+export function detectarImportadoresNoPermitidosDeBootstrap(archivos: readonly string[]): string[] {
+  return archivos.filter((archivo) => detectarImportadorNoPermitidoDeBootstrap(archivo, readFileSync(archivo, 'utf8')));
+}
