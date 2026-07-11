@@ -118,45 +118,104 @@ export class OperacionesBootstrapPostgres implements OperacionesBootstrap {
 }
 
 const CONNECTION_TIMEOUT_MS_DEFECTO = 5_000;
+const CIERRE_TIMEOUT_MS_DEFECTO = 5_000;
 const INTENTOS_CONEXION_DEFECTO = 3;
 const BACKOFF_BASE_MS_DEFECTO = 200;
 
 export type OpcionesConexionBootstrap = Readonly<{
   connectionTimeoutMillis?: number;
+  cierreTimeoutMillis?: number;
   intentosConexion?: number;
   backoffBaseMs?: number;
 }>;
 
+type OpcionesReintento = Readonly<{
+  esReintentable?: (error: unknown) => boolean;
+  alReintentar?: (intento: number, error: unknown) => void;
+}>;
+
 /**
  * Reintenta `intentar` hasta `intentos` veces con backoff lineal creciente
- * (`backoffBaseMs * intento` entre cada reintento), pensado para errores
- * transitorios de conexión (red caída momentáneamente, reset). No distingue
- * el tipo de error: solo debe usarse para operaciones idempotentes como abrir
- * una conexión nueva, nunca para lógica de negocio no idempotente.
+ * (`backoffBaseMs * intento` entre cada reintento). Sin `esReintentable`
+ * reintenta cualquier error; pásala para limitar los reintentos a errores
+ * realmente transitorios (ver `esErrorTransitorioDeConexion`). Solo debe
+ * usarse para operaciones idempotentes como abrir una conexión nueva, nunca
+ * para lógica de negocio no idempotente.
  */
 export async function conectarConReintentos<T>(
   intentar: () => Promise<T>,
   intentos: number,
   backoffBaseMs: number,
+  opciones: OpcionesReintento = {},
 ): Promise<T> {
-  let ultimoError: unknown;
+  const esReintentable = opciones.esReintentable ?? (() => true);
 
   for (let intento = 1; intento <= intentos; intento += 1) {
     try {
       return await intentar();
     } catch (error) {
-      ultimoError = error;
-      if (intento < intentos) {
-        await esperar(backoffBaseMs * intento);
+      const quedanIntentos = intento < intentos;
+      if (!quedanIntentos || !esReintentable(error)) {
+        throw error;
       }
+      opciones.alReintentar?.(intento, error);
+      await esperar(backoffBaseMs * intento);
     }
   }
 
-  throw ultimoError;
+  throw new Error('conectarConReintentos: estado inalcanzable.');
+}
+
+const CODIGOS_ERROR_TRANSITORIO_DE_RED = new Set([
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'EPIPE',
+]);
+
+/**
+ * Distingue errores de red transitorios (red caída, timeout, reset) —
+ * seguros de reintentar — de errores deterministas como credenciales
+ * inválidas o un nombre de base inexistente (código SQLSTATE de Postgres,
+ * p. ej. `28P01`), que reintentar solo demora el diagnóstico y repite
+ * intentos de autenticación fallidos contra la base administrativa.
+ */
+export function esErrorTransitorioDeConexion(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const codigo = (error as { code?: unknown }).code;
+  return typeof codigo === 'string' && CODIGOS_ERROR_TRANSITORIO_DE_RED.has(codigo);
 }
 
 function esperar(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Cierra `cliente` con un límite de tiempo: `Client.end()` de `pg` no tiene
+ * timeout propio (a diferencia de `connect()`) y puede colgarse si la
+ * conexión ya está en mal estado. Si no confirma el cierre a tiempo, lanza
+ * en vez de esperar indefinidamente; el llamador decide cómo proceder (ver
+ * el catch en `ejecutarBootstrapPostgresDesdeEntorno`, que ya loguea fallos
+ * de cierre sin enmascarar el error original de siembra).
+ */
+async function cerrarConLimiteDeTiempo(cliente: { end(): Promise<void> }, timeoutMs: number): Promise<void> {
+  let temporizador: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    temporizador = setTimeout(() => {
+      reject(new Error(`No se confirmó el cierre de la conexión administrativa dentro de ${timeoutMs}ms.`));
+    }, timeoutMs);
+    temporizador.unref?.();
+  });
+
+  try {
+    await Promise.race([cliente.end(), timeout]);
+  } finally {
+    clearTimeout(temporizador);
+  }
 }
 
 /** Crea el adaptador real para scripts server-only; no acepta variables públicas. */
@@ -170,6 +229,7 @@ export async function crearOperacionesBootstrapPostgres(
 
   const {
     connectionTimeoutMillis = CONNECTION_TIMEOUT_MS_DEFECTO,
+    cierreTimeoutMillis = CIERRE_TIMEOUT_MS_DEFECTO,
     intentosConexion = INTENTOS_CONEXION_DEFECTO,
     backoffBaseMs = BACKOFF_BASE_MS_DEFECTO,
   } = opciones;
@@ -183,11 +243,18 @@ export async function crearOperacionesBootstrapPostgres(
     },
     intentosConexion,
     backoffBaseMs,
+    {
+      esReintentable: esErrorTransitorioDeConexion,
+      alReintentar: (intento, error) => {
+        const mensaje = error instanceof Error ? error.message : String(error);
+        console.warn(`Intento de conexión administrativa ${intento} falló, reintentando: ${mensaje}`);
+      },
+    },
   );
 
   return new OperacionesBootstrapPostgres({
     query: cliente.query.bind(cliente),
-    cerrar: () => cliente.end(),
+    cerrar: () => cerrarConLimiteDeTiempo(cliente, cierreTimeoutMillis),
   });
 }
 

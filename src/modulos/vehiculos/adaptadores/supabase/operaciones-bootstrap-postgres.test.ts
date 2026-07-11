@@ -3,6 +3,7 @@ import {
   conectarConReintentos,
   crearOperacionesBootstrapPostgres,
   ejecutarBootstrapPostgresDesdeEntorno,
+  esErrorTransitorioDeConexion,
   OperacionesBootstrapPostgres,
   type ClientePostgresBootstrap,
 } from './operaciones-bootstrap-postgres';
@@ -102,6 +103,57 @@ describe('conectarConReintentos', () => {
     await expect(conectarConReintentos(intentar, 3, 1)).rejects.toBe(errorFinal);
     expect(intentar).toHaveBeenCalledTimes(3);
   });
+
+  it('no reintenta si esReintentable devuelve false, y lanza de inmediato', async () => {
+    const errorNoTransitorio = new Error('contraseña inválida');
+    const intentar = vi.fn(async () => {
+      throw errorNoTransitorio;
+    });
+
+    await expect(
+      conectarConReintentos(intentar, 3, 1, { esReintentable: () => false }),
+    ).rejects.toBe(errorNoTransitorio);
+    expect(intentar).toHaveBeenCalledOnce();
+  });
+
+  it('llama a alReintentar con el número de intento y el error antes de cada reintento', async () => {
+    let llamadas = 0;
+    const intentar = vi.fn(async () => {
+      llamadas += 1;
+      if (llamadas < 3) throw new Error(`fallo ${llamadas}`);
+      return 'conectado';
+    });
+    const alReintentar = vi.fn();
+
+    await conectarConReintentos(intentar, 3, 1, { alReintentar });
+
+    expect(alReintentar).toHaveBeenCalledTimes(2);
+    expect(alReintentar).toHaveBeenNthCalledWith(1, 1, expect.objectContaining({ message: 'fallo 1' }));
+    expect(alReintentar).toHaveBeenNthCalledWith(2, 2, expect.objectContaining({ message: 'fallo 2' }));
+  });
+});
+
+describe('esErrorTransitorioDeConexion', () => {
+  it.each(['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH', 'EPIPE'])(
+    'considera transitorio el código de red %s',
+    (codigo) => {
+      expect(esErrorTransitorioDeConexion(Object.assign(new Error('fallo de red'), { code: codigo }))).toBe(true);
+    },
+  );
+
+  it('no considera transitorio un fallo de autenticación de Postgres (28P01)', () => {
+    expect(
+      esErrorTransitorioDeConexion(Object.assign(new Error('password authentication failed'), { code: '28P01' })),
+    ).toBe(false);
+  });
+
+  it('no considera transitorio un error sin código', () => {
+    expect(esErrorTransitorioDeConexion(new Error('algo salió mal'))).toBe(false);
+  });
+
+  it('no considera transitorio un valor que no es un error', () => {
+    expect(esErrorTransitorioDeConexion('no soy un error')).toBe(false);
+  });
 });
 
 describe('crearOperacionesBootstrapPostgres', () => {
@@ -111,8 +163,9 @@ describe('crearOperacionesBootstrapPostgres', () => {
   });
 
   async function configurarClientePg(
-    implementacion: (opciones: Record<string, unknown>) => Pick<ClientePostgresBootstrap, 'query' | 'cerrar'> & {
+    implementacion: (opciones: Record<string, unknown>) => Pick<ClientePostgresBootstrap, 'query'> & {
       connect: () => Promise<void>;
+      end: () => Promise<void>;
     },
   ) {
     const { Client } = await import('pg');
@@ -126,7 +179,7 @@ describe('crearOperacionesBootstrapPostgres', () => {
     await configurarClientePg(() => ({
       connect: vi.fn(async () => undefined),
       query: vi.fn(),
-      cerrar: vi.fn(async () => undefined),
+      end: vi.fn(async () => undefined),
     }));
 
     await crearOperacionesBootstrapPostgres('postgresql://x/y');
@@ -141,7 +194,7 @@ describe('crearOperacionesBootstrapPostgres', () => {
     await configurarClientePg(() => ({
       connect: vi.fn(async () => undefined),
       query: vi.fn(),
-      cerrar: vi.fn(async () => undefined),
+      end: vi.fn(async () => undefined),
     }));
 
     await crearOperacionesBootstrapPostgres('postgresql://x/y', { connectionTimeoutMillis: 1_234 });
@@ -157,10 +210,10 @@ describe('crearOperacionesBootstrapPostgres', () => {
       const fallaEsteIntento = intento < 2;
       return {
         connect: vi.fn(async () => {
-          if (fallaEsteIntento) throw new Error('ECONNREFUSED');
+          if (fallaEsteIntento) throw Object.assign(new Error('ECONNREFUSED'), { code: 'ECONNREFUSED' });
         }),
         query: vi.fn(),
-        cerrar: vi.fn(async () => undefined),
+        end: vi.fn(async () => undefined),
       };
     });
 
@@ -176,15 +229,65 @@ describe('crearOperacionesBootstrapPostgres', () => {
   it('propaga el último error de conexión si se agotan los reintentos', async () => {
     await configurarClientePg(() => ({
       connect: vi.fn(async () => {
-        throw new Error('ECONNREFUSED persistente');
+        throw Object.assign(new Error('ECONNREFUSED persistente'), { code: 'ECONNREFUSED' });
       }),
       query: vi.fn(),
-      cerrar: vi.fn(async () => undefined),
+      end: vi.fn(async () => undefined),
     }));
 
     await expect(
       crearOperacionesBootstrapPostgres('postgresql://x/y', { intentosConexion: 2, backoffBaseMs: 1 }),
     ).rejects.toThrow('ECONNREFUSED persistente');
+  });
+
+  it('no reintenta un fallo de conexión no transitorio (ej. credenciales inválidas)', async () => {
+    const { Client } = await import('pg');
+    await configurarClientePg(() => ({
+      connect: vi.fn(async () => {
+        throw Object.assign(new Error('password authentication failed'), { code: '28P01' });
+      }),
+      query: vi.fn(),
+      end: vi.fn(async () => undefined),
+    }));
+
+    await expect(
+      crearOperacionesBootstrapPostgres('postgresql://x/y', { intentosConexion: 3, backoffBaseMs: 1 }),
+    ).rejects.toThrow('password authentication failed');
+    expect(Client).toHaveBeenCalledOnce();
+  });
+
+  it('loguea cada reintento de conexión con console.warn', async () => {
+    const advertencia = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    let intento = 0;
+    await configurarClientePg(() => {
+      intento += 1;
+      const fallaEsteIntento = intento < 2;
+      return {
+        connect: vi.fn(async () => {
+          if (fallaEsteIntento) throw Object.assign(new Error('ECONNREFUSED'), { code: 'ECONNREFUSED' });
+        }),
+        query: vi.fn(),
+        end: vi.fn(async () => undefined),
+      };
+    });
+
+    await crearOperacionesBootstrapPostgres('postgresql://x/y', { intentosConexion: 3, backoffBaseMs: 1 });
+
+    expect(advertencia).toHaveBeenCalledOnce();
+    expect(advertencia.mock.calls[0]?.[0]).toContain('Intento de conexión');
+    advertencia.mockRestore();
+  });
+
+  it('cerrar() no espera indefinidamente si Client.end() nunca resuelve', async () => {
+    await configurarClientePg(() => ({
+      connect: vi.fn(async () => undefined),
+      query: vi.fn(),
+      end: vi.fn(() => new Promise<void>(() => {})),
+    }));
+
+    const operaciones = await crearOperacionesBootstrapPostgres('postgresql://x/y', { cierreTimeoutMillis: 5 });
+
+    await expect(operaciones.cerrar()).rejects.toThrow(/No se confirmó el cierre/);
   });
 });
 
