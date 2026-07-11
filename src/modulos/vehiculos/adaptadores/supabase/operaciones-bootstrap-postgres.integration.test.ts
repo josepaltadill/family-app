@@ -64,4 +64,23 @@ ejecutar('OperacionesBootstrapPostgres (Postgres local)', () => {
 
     await conexion.query('delete from public.mv_households where id = $1', [primero.id]);
   });
+
+  it('crearHogar resuelve variantes de mayúsculas/espacios como el mismo hogar', async () => {
+    const conexion = await obtenerCliente();
+    const operaciones = new OperacionesBootstrapPostgres({ query: conexion.query.bind(conexion) });
+    const sufijo = randomUUID();
+    const nombreOriginal = `Hogar Variante ${sufijo}`;
+    const nombreVariante = `  hogar variante ${sufijo}  `.toUpperCase();
+
+    const primero = await operaciones.crearHogar(nombreOriginal);
+    const segundo = await operaciones.crearHogar(nombreVariante);
+    const encontradoPorVariante = await operaciones.buscarHogarPorNombre(nombreVariante);
+    const conteo = await operaciones.contarHogaresPorNombre(nombreVariante);
+
+    expect(segundo.id).toBe(primero.id);
+    expect(encontradoPorVariante?.id).toBe(primero.id);
+    expect(conteo).toBe(1);
+
+    await conexion.query('delete from public.mv_households where id = $1', [primero.id]);
+  });
 });

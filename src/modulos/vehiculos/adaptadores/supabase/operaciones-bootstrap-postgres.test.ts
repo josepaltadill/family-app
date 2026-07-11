@@ -34,7 +34,7 @@ describe('OperacionesBootstrapPostgres', () => {
     expect(cliente.query.mock.calls[0]?.[0]).toContain('on conflict (email)');
   });
 
-  it('crea o reutiliza el hogar usando la restricción única de nombre', async () => {
+  it('crea o reutiliza el hogar usando el índice único normalizado de nombre', async () => {
     const cliente = crearCliente();
     const operaciones = new OperacionesBootstrapPostgres(cliente);
 
@@ -44,7 +44,42 @@ describe('OperacionesBootstrapPostgres', () => {
       expect.stringContaining('insert into public.mv_households'),
       ['Hogar de desarrollo'],
     );
-    expect(cliente.query.mock.calls[0]?.[0]).toContain('on conflict (nombre)');
+    expect(cliente.query.mock.calls[0]?.[0]).toContain('on conflict (lower(btrim(nombre)))');
+  });
+
+  it('recorta espacios del nombre del hogar antes de guardarlo', async () => {
+    const cliente = crearCliente();
+    const operaciones = new OperacionesBootstrapPostgres(cliente);
+
+    await operaciones.crearHogar('  Hogar de desarrollo  ');
+
+    expect(cliente.query).toHaveBeenCalledWith(expect.stringContaining('insert into public.mv_households'), [
+      'Hogar de desarrollo',
+    ]);
+  });
+
+  it('busca el hogar por nombre comparando sin distinguir mayúsculas ni espacios', async () => {
+    const cliente = crearCliente();
+    const operaciones = new OperacionesBootstrapPostgres(cliente);
+
+    await operaciones.buscarHogarPorNombre('  Hogar DE Desarrollo  ');
+
+    expect(cliente.query).toHaveBeenCalledWith(
+      expect.stringContaining('lower(btrim(nombre)) = lower(btrim($1))'),
+      ['  Hogar DE Desarrollo  '],
+    );
+  });
+
+  it('cuenta hogares por nombre comparando sin distinguir mayúsculas ni espacios', async () => {
+    const cliente = crearCliente();
+    const operaciones = new OperacionesBootstrapPostgres(cliente);
+
+    await operaciones.contarHogaresPorNombre('  Hogar DE Desarrollo  ');
+
+    expect(cliente.query).toHaveBeenCalledWith(
+      expect.stringContaining('lower(btrim(nombre)) = lower(btrim($1))'),
+      ['  Hogar DE Desarrollo  '],
+    );
   });
 
   it('crea la membresía admin idempotentemente sin interpolar identificadores', async () => {

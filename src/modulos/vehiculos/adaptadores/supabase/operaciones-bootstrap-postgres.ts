@@ -64,7 +64,10 @@ export class OperacionesBootstrapPostgres implements OperacionesBootstrap {
 
   async buscarHogarPorNombre(nombre: string): Promise<FilaId | null> {
     return primeraFila<FilaId>(
-      this.cliente.query('select id from public.mv_households where nombre = $1 limit 1', [nombre]),
+      this.cliente.query(
+        'select id from public.mv_households where lower(btrim(nombre)) = lower(btrim($1)) limit 1',
+        [nombre],
+      ),
     );
   }
 
@@ -73,9 +76,9 @@ export class OperacionesBootstrapPostgres implements OperacionesBootstrap {
       this.cliente.query(
         `insert into public.mv_households (nombre)
          values ($1)
-         on conflict (nombre) do update set nombre = excluded.nombre
+         on conflict (lower(btrim(nombre))) do update set nombre = excluded.nombre
          returning id`,
-        [nombre],
+        [nombre.trim()],
       ),
     );
 
@@ -86,7 +89,7 @@ export class OperacionesBootstrapPostgres implements OperacionesBootstrap {
   async contarHogaresPorNombre(nombre: string): Promise<number> {
     const fila = await primeraFila<FilaCantidad>(
       this.cliente.query(
-        'select count(*)::text as cantidad from public.mv_households where nombre = $1',
+        'select count(*)::text as cantidad from public.mv_households where lower(btrim(nombre)) = lower(btrim($1))',
         [nombre],
       ),
     );

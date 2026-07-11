@@ -6,18 +6,18 @@ declare
 begin
   select count(*) into duplicados
   from (
-    select nombre
+    select lower(btrim(nombre)) as nombre_normalizado
     from public.mv_households
-    group by nombre
+    group by lower(btrim(nombre))
     having count(*) > 1
   ) as mv_households_nombre_duplicados;
 
   if duplicados > 0 then
-    raise exception 'mv_households tiene % nombre(s) duplicado(s); no se puede aplicar unique (nombre) sin consolidar antes. Ver preflight en supabase/migrations/README.md.', duplicados;
+    raise exception 'mv_households tiene % nombre(s) duplicado(s) ignorando mayúsculas/espacios; no se puede aplicar el índice único normalizado sin consolidar antes. Ver preflight en supabase/migrations/README.md.', duplicados;
   end if;
 end $$;
 
-alter table public.mv_households
-  add constraint mv_households_nombre_key unique (nombre);
+create unique index mv_households_nombre_key
+  on public.mv_households (lower(btrim(nombre)));
 
 commit;

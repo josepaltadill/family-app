@@ -225,15 +225,23 @@ En esta sesión no hay MCP Supabase conectado ni script de puente Supabase detec
 ## Bootstrap administrativo real y unicidad de hogares
 
 La migración `20260711000000_mv_households_nombre_unique.sql` añade
-`mv_households_nombre_key`, una restricción `unique (nombre)` que hace seguro el
-buscar-o-crear concurrente del hogar de desarrollo.
+`mv_households_nombre_key`, un índice único **normalizado**
+(`lower(btrim(nombre))`) que hace seguro el buscar-o-crear concurrente del
+hogar de desarrollo. Es normalizado a propósito: una restricción `unique
+(nombre)` exacta dejaría pasar `"Hogar de desarrollo"`, `"hogar de
+desarrollo"` y `"Hogar de desarrollo "` como tres hogares distintos, lo cual
+contradice el propósito completo de la unicidad. `crearHogar` y
+`buscarHogarPorNombre` en `operaciones-bootstrap-postgres.ts` comparan y
+resuelven conflictos con esta misma normalización, y `crearHogar` además
+recorta espacios antes de guardar.
 
 El preflight ya no depende solo de disciplina de operador: la propia migración
 incluye un guard (`do $$ ... raise exception ... end $$;`) que cuenta nombres
-duplicados en `mv_households` y aborta la transacción con un error explícito
-si encuentra alguno, antes de intentar añadir la restricción. Aplicar la
-migración a una base con duplicados falla de forma segura y explícita en vez
-de depender de que un operador recuerde correr una consulta manual antes.
+duplicados en `mv_households` **tras normalizar** mayúsculas/espacios y aborta
+la transacción con un error explícito si encuentra alguno, antes de crear el
+índice. Aplicar la migración a una base con duplicados (exactos o solo
+variantes de mayúsculas/espacios) falla de forma segura y explícita en vez de
+depender de que un operador recuerde correr una consulta manual antes.
 
 Si la migración falla por este guard, no borrar ni fusionar hogares de forma
 automática: identificar membresías, vehículos y eventos asociados, acordar cuál
@@ -244,9 +252,9 @@ o preparar un fix-forward específico; nunca forzar la restricción perdiendo da
 Para inspeccionar los duplicados manualmente antes de intervenir:
 
 ```sql
-select nombre, count(*) as cantidad
+select lower(btrim(nombre)) as nombre_normalizado, count(*) as cantidad
 from public.mv_households
-group by nombre
+group by lower(btrim(nombre))
 having count(*) > 1;
 ```
 
