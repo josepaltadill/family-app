@@ -12,14 +12,14 @@ export async function registrarVehiculo(
   dependencias: DependenciasRegistrarVehiculo,
   datos: DatosCrearVehiculo,
 ): Promise<Vehiculo> {
-  await dependencias.proveedorIdentidad.obtenerActorActual();
+  const { householdId } = await dependencias.proveedorIdentidad.obtenerContexto();
 
-  if (await dependencias.repositorioVehiculos.existeMatricula(datos.matricula)) {
+  if (await dependencias.repositorioVehiculos.existeMatricula(householdId, datos.matricula)) {
     throw new ErrorDominio('Ya existe un vehículo con esa matrícula.');
   }
 
   const vehiculo = crearVehiculo(datos);
-  await dependencias.repositorioVehiculos.guardar(vehiculo);
+  await dependencias.repositorioVehiculos.guardar(householdId, vehiculo);
 
   return vehiculo;
 }

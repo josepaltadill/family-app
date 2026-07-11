@@ -663,3 +663,254 @@ Se permite preparar migraciones para la instancia real, pero no se ejecutará ni
 ### Estado
 
 No se ejecutó ninguna operación contra Supabase real. Solo se actualizaron guardarraíles y tareas.
+
+## PR 2 — Contexto de hogar, adaptador Supabase de servidor y atomicidad (tareas 5–9)
+
+### Estado estructurado consumido/producido
+
+- Proyecto: `manteniment-vehicles`
+- Cambio activo: `vehicle-maintenance-app`
+- Artifact store: `openspec` (autoritativo para esta ejecución); Engram sincronizado en `sdd/vehicle-maintenance-app/apply-progress`.
+- Modo: interactivo, TDD estricto activo (`npm test`); Strict TDD Mode confirmado por el orquestador.
+- Estrategia de entrega: `auto-chain`, `stacked-to-main`. Corte asignado: PR 2 completo (tareas 5–9), sin tocar PR 3 (tareas 10–13) ni migraciones nuevas.
+- Alcance ejecutado: reapertura de PR1 para scoping por hogar (tarea 5), adaptación de mapeadores al esquema Supabase real sin migración nueva (tarea 6), adaptador Supabase solo de servidor (tarea 7), atomicidad evento+kilometraje documentada y probada (tarea 8), y frontera auth/RLS con bootstrap server-only + `ProveedorIdentidad` de servidor (tarea 9).
+- Fuera de alcance de este corte, por instrucción explícita: tareas 10–13 (validación Zod, server actions, pantallas Next.js, verificación final del MVP), y cualquier migración SQL nueva o modificada.
+
+### Tareas completadas y checkboxes persistidos
+
+Sección 5 (enmienda de PR1 — contexto de hogar):
+- [x] RED: `vehiculos-casos-uso.test.ts` reescrito para exigir rechazo de matrícula duplicada POR HOGAR y permitir la misma matrícula en hogar distinto.
+- [x] GREEN: `ContextoAplicacion { actor, householdId }` y `ProveedorIdentidad.obtenerContexto()` en `proveedor-identidad.ts`.
+- [x] GREEN: `RepositorioVehiculos` scoped por hogar (`guardar`, `buscarPorId`, `listar`, `existeMatricula` reciben `householdId`).
+- [x] GREEN: `RepositorioEventosVehiculo`/`UnidadTrabajoVehiculos` reciben `householdId` explícito.
+- [x] GREEN: los cinco casos de uso resuelven `obtenerContexto()` y propagan `householdId`.
+- [x] GREEN: dobles en memoria actualizados (`RepositorioVehiculosEnMemoria` indexa por `(householdId, id)`; `ProveedorIdentidadTemporal` acepta `householdId` fijo de desarrollo, con default y override para pruebas de aislamiento).
+- [x] TRIANGULATE: prueba de aislamiento — un hogar no ve vehículos de otro (`listar`/`buscarPorId`).
+- [x] REFACTOR: confirmado (grep) que `dominio/` sigue sin ninguna referencia a `householdId`.
+
+Sección 6 (mapeadores contra esquema real, sin migración nueva):
+- [x] RED/GREEN/REFACTOR: `mapeadores-supabase.ts` + `mapeadores-supabase.test.ts` mapean dominio↔filas `mv_vehiculos`/`mv_eventos_vehiculo` reales (`household_id`, `fecha_creacion` no `creado_en`, FK compuesta `vehiculo_id`, sin columnas inexistentes). Se añadió `Vehiculo.reconstruir()`/`reconstruirVehiculo()` (con su propio ciclo RED→GREEN en `vehiculo.test.ts`) porque el mapeador fila→dominio necesita reconstruir un vehículo inactivo directamente, sin pasar por `desactivar()`.
+
+Sección 7 (adaptador Supabase solo de servidor):
+- [x] RED/GREEN: `entorno.ts` (validación de variables, rechazo explícito de nombres `NEXT_PUBLIC_*`), `cliente-supabase-servidor.ts` (guarda `typeof window !== 'undefined'`, login server-side), `repositorio-vehiculos-supabase.ts`, `repositorio-eventos-supabase.ts` implementando los puertos scoped por hogar.
+- [x] REFACTOR: confirmado que no hay ningún archivo `'use client'` en el repo y que ningún archivo de producción contiene un patrón de clave `service_role` (ver sección 9 / `seguridad-servidor.ts`).
+
+Sección 8 (atomicidad evento + kilometraje):
+- [x] RED/GREEN/TRIANGULATE: `registrar-evento-vehiculo.test.ts` dedicado, contrato a nivel de caso de uso (una única llamada a la unidad de trabajo; propagación de error sin guardar evento; evento histórico sin `vehiculoActualizado`).
+- [x] GREEN Supabase: `repositorio-eventos-supabase.ts` implementa el orden coordinado (vehículo primero, evento después) con comentario explícito de riesgo/compensación, ya que este PR no crea RPC/migración nueva.
+- [x] REFACTOR: comentario en `registrar-evento-vehiculo.ts` explicando por qué no son dos escrituras independientes.
+
+Sección 9 (frontera auth/RLS y bootstrap):
+- [x] RED/GREEN: `bootstrap-servidor.ts` + `bootstrap-servidor.test.ts` (idempotencia probada: segunda ejecución no duplica usuario/hogar/membresía y devuelve los mismos ids).
+- [x] RED/GREEN: `proveedor-identidad-supabase-servidor.ts` + su test (resuelve `ContextoAplicacion` desde el `householdId` real sembrado, no arbitrario; rechaza si no hay membresía).
+- [x] RED/GREEN: `seguridad-servidor.ts` + `seguridad-servidor.test.ts` (detector de imports `'use client'` indebidos hacia adaptadores Supabase + detector de patrón de clave `service_role`, incluyendo barrido real del repositorio).
+- [x] GREEN: documentación de la decisión de credencial y del procedimiento de siembra en `supabase/migrations/README.md`.
+- [x] GREEN (parcial, ver blocker): confirmación de ausencia de `service_role`/claves privilegiadas en código cliente y componentes React (100% verificado); `.env.example` no pudo crearse por bloqueo de sandbox (ver blockers).
+- [x] REFACTOR: la autorización futura permanece fuera del dominio (`dominio/rol-usuario.ts` sigue siendo solo un concepto, sin matriz aplicada) y fuera de componentes UI (no existen componentes React en este PR).
+
+### TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 5. Contexto de hogar en casos de uso | `aplicacion/casos-uso/vehiculos-casos-uso.test.ts` | Application | ✅ `npm test`: 7 archivos, 59 tests antes de tocar nada | ✅ Reescrito con asserts por hogar + hogar distinto; falló 7/9 contra firmas sin hogar (incluye error de tipos por constructor `ProveedorIdentidadTemporal(hogarA)`) | ✅ Firmas de puertos/casos de uso/dobles actualizadas; 9/9 | ✅ Prueba de aislamiento `buscarPorId`/`listar` añadida | ✅ Grep confirma dominio sin `householdId`; `npm run build` verde |
+| 6. Mapeadores Supabase (esquema real) | `adaptadores/supabase/mapeadores-supabase.test.ts` | Unit/contract | ✅ N/A (módulo nuevo) | ✅ Falló: módulo `./mapeadores-supabase` inexistente | ✅ 7/7 tras implementar mapeadores | ✅ Casos activo/inactivo, con/sin coste y vencimientos, fila→dominio y dominio→fila | ✅ Sin columnas `creado_en`/`actualizado_en`; prefijo `mv_` respetado |
+| 6b. Reconstrucción de Vehiculo | `dominio/vehiculo.test.ts` | Unit/domain | ✅ 11 tests previos verdes | ✅ Falló: `reconstruirVehiculo is not a function` (2 tests) | ✅ `Vehiculo.reconstruir()`/`reconstruirVehiculo()` añadidos; 11/11 | ✅ Caso activo (sin fecha) y caso inactivo (con fecha) | ✅ Constructor privado conservado; solo se añade una segunda factory explícita para adaptadores |
+| 7. Entorno de servidor | `compartido/infraestructura/entorno.test.ts` | Unit | ✅ N/A (módulo nuevo) | ✅ Falló: módulo `./entorno` inexistente | ✅ 3/3 tras implementar `leerEntornoSupabase` | ✅ Falta `SUPABASE_URL` vs. falta `SUPABASE_BOOTSTRAP_PASSWORD` (dos variables distintas) | ✅ Guarda explícita contra nombres `NEXT_PUBLIC_*` |
+| 7b. Cliente Supabase de servidor | `adaptadores/supabase/cliente-supabase-servidor.test.ts` | Unit (con `vi.mock`) | ✅ N/A (módulo nuevo) | ✅ Falló: módulo inexistente (3/3 fallando) | ✅ 3/3 tras implementar guarda `window` + login | ✅ Éxito de login vs. fallo de login (mensajes distintos) | ✅ Guarda de servidor extraída a función nombrada |
+| 7c. Repositorio Supabase de vehículos | `adaptadores/supabase/repositorio-vehiculos-supabase.test.ts` | Unit/contract (cliente falso) | ✅ N/A (módulo nuevo) | ✅ Falló: módulo inexistente | ✅ 4/4 tras implementar `guardar`/`buscarPorId`/`listar`/`existeMatricula` | ✅ Filtros `eq` para `buscarPorId` (2 filtros) vs. `listar` (1 filtro) vs. `existeMatricula` con otro hogar | ✅ Constante `TABLA`; mensajes de error homogéneos |
+| 7d. Repositorio Supabase de eventos + UoW | `adaptadores/supabase/repositorio-eventos-supabase.test.ts` | Unit/contract (cliente falso) | ✅ N/A (módulo nuevo) | ✅ Falló: módulo inexistente | ✅ 6/6 tras implementar `guardar`/`listarPorVehiculo`/`listarConVencimiento`/UoW | ✅ Caso con `vehiculoActualizado` (dos tablas, orden vehículo→evento) vs. sin él (solo evento) vs. fallo del vehículo (evento nunca se escribe) | ✅ Comentario extenso documentando por qué no hay RPC en este PR y el riesgo de consistencia aceptado |
+| 8. Contrato atómico a nivel de caso de uso | `aplicacion/casos-uso/registrar-evento-vehiculo.test.ts` | Application (fakes) | ✅ Suite completa verde antes de crear el archivo | ⚠️ Aprobación: el contrato ya era correcto desde PR1/tarea 4 y se preservó en la tarea 5; los 3 tests pasaron en su primera ejecución (no hubo fallo real sin tocar producción intencionalmente) | ✅ 3/3 | ✅ Caso feliz, caso de fallo (propaga error, una sola llamada a la UoW) y caso histórico (`vehiculoActualizado` undefined) | ✅ Comentario añadido en `registrar-evento-vehiculo.ts` explicando el contrato |
+| 9. Bootstrap server-only | `adaptadores/supabase/bootstrap-servidor.test.ts` | Unit (operaciones falsas) | ✅ N/A (módulo nuevo) | ✅ Falló: módulo inexistente | ✅ 2/2 tras implementar `sembrarHogarDeDesarrollo` | ✅ Primera ejecución (crea) vs. segunda ejecución (idempotente, mismos ids, cero duplicados) | ✅ Orquestación mínima buscar-o-crear, sin lógica adicional |
+| 9b. ProveedorIdentidad de servidor | `adaptadores/supabase/proveedor-identidad-supabase-servidor.test.ts` | Unit (cliente falso) | ✅ N/A (módulo nuevo) | ✅ Falló: módulo inexistente | ✅ 3/3 tras implementar resolución de contexto | ✅ Rol `admin` vs. rol `editor` vs. sin membresía (rechazo) | ✅ `householdId` recibido por constructor, nunca inventado dentro de la clase |
+| 9c. Guardas de seguridad estáticas | `adaptadores/supabase/seguridad-servidor.test.ts` | Unit + barrido real del repo | ✅ N/A (módulo nuevo) | ✅ Falló: módulo inexistente (0 tests) | ✅ 7/7 tras implementar detectores | ✅ `use client` con import indebido vs. sin import vs. archivo de servidor con el mismo import (no debe marcarse) | ✅ Un falso positivo del propio detector (contiene el patrón que define) resuelto excluyéndose a sí mismo del barrido, documentado en el test |
+
+### Test Summary
+
+- **Total tests nuevos/modificados en este PR2**: 12 archivos de test tocados o creados (`vehiculos-casos-uso.test.ts` reescrito, `vehiculo.test.ts` ampliado, y 10 archivos de test nuevos bajo `adaptadores/supabase/` y `compartido/infraestructura/`).
+- **Total tests passing (suite completa)**: 101/101 (`npm test`), repartidos en 16 archivos.
+- **Layers usadas**: Unit/domain, Application (con fakes), Unit/contract con dobles del cliente Supabase, y un barrido real de seguridad sobre el repositorio de archivos.
+- **Approval tests**: 1 (sección 8, contrato ya correcto heredado de PR1/tarea 4 — ver nota de honestidad TDD abajo).
+- **Pure functions creadas/ampliadas**: mapeadores `aFilaVehiculo`/`aVehiculoDesdeFila`/`aFilaEventoVehiculo`/`aEventoVehiculoDesdeFila`, `sembrarHogarDeDesarrollo` (orquestación con efectos inyectados, no pura pero determinista), `detectarImportsClienteIndebidosEnContenido`, `contieneClavePrivilegiada`.
+
+### Nota de honestidad TDD — tarea 8
+
+El contrato de atomicidad evento+kilometraje ya estaba correctamente implementado
+desde PR1 (tarea 4) y se preservó intacto durante la reapertura de la tarea 5
+(scoping por hogar). Al escribir `registrar-evento-vehiculo.test.ts` dedicado que
+pide la tarea 8, los tres tests pasaron en su primera ejecución sin necesitar
+ningún cambio de código productivo: no hubo una fase RED real porque no había
+ningún comportamiento incorrecto que corregir. Siguiendo la sección "Approval
+Testing" de `strict-tdd.md` (pensada para consolidar comportamiento ya correcto
+sin refactor), se documenta esto explícitamente en vez de fabricar una regresión
+artificial en producción solo para forzar un RED — eso habría sido peor
+ingeniería, no mejor disciplina TDD. El valor real de esta tarea 8 fue: (a) el
+archivo de test dedicado que pide el enunciado, (b) la implementación Supabase
+de la coordinación con su propio ciclo RED→GREEN genuino (`repositorio-eventos-supabase.test.ts`,
+sección 7d), y (c) el comentario explícito de por qué no son dos escrituras
+independientes.
+
+### Comandos ejecutados (resumen)
+
+- `npm test` (safety net inicial): 7 archivos, 59 tests.
+- Tras cada RED: `npm test -- <archivo>` confirmando fallo (módulo inexistente o aserciones no cumplidas).
+- Tras cada GREEN/TRIANGULATE: `npm test -- <archivo>` confirmando verde.
+- `npm test` (suite completa, varias veces durante el corte): 16 archivos, 101 tests, siempre en verde al cierre de cada tarea.
+- `npm run build`: verde en cada cierre de tarea (Next.js 16.2.10 + TypeScript, sin errores).
+- `npm install @supabase/supabase-js@2.110.2`: añadida como dependencia de producción para el cliente de servidor.
+- Grep manual (`rg`) para: imports prohibidos en dominio, `service_role`, `NEXT_PUBLIC_`, archivos `'use client'` — sin coincidencias fuera de comentarios/documentación esperados.
+
+### Archivos cambiados
+
+Modificados:
+- `src/modulos/vehiculos/aplicacion/puertos/proveedor-identidad.ts`
+- `src/modulos/vehiculos/aplicacion/puertos/repositorio-vehiculos.ts`
+- `src/modulos/vehiculos/aplicacion/puertos/repositorio-eventos-vehiculo.ts`
+- `src/modulos/vehiculos/aplicacion/casos-uso/registrar-vehiculo.ts`
+- `src/modulos/vehiculos/aplicacion/casos-uso/listar-vehiculos.ts`
+- `src/modulos/vehiculos/aplicacion/casos-uso/desactivar-vehiculo.ts`
+- `src/modulos/vehiculos/aplicacion/casos-uso/registrar-evento-vehiculo.ts`
+- `src/modulos/vehiculos/aplicacion/casos-uso/corregir-kilometraje.ts`
+- `src/modulos/vehiculos/aplicacion/casos-uso/vehiculos-casos-uso.test.ts`
+- `src/modulos/vehiculos/aplicacion/pruebas/proveedor-identidad-temporal.ts`
+- `src/modulos/vehiculos/aplicacion/pruebas/repositorio-vehiculos-en-memoria.ts`
+- `src/modulos/vehiculos/aplicacion/pruebas/repositorio-eventos-vehiculo-en-memoria.ts`
+- `src/modulos/vehiculos/dominio/vehiculo.ts`
+- `src/modulos/vehiculos/dominio/vehiculo.test.ts`
+- `supabase/migrations/README.md`
+- `package.json`, `package-lock.json` (añadido `@supabase/supabase-js`)
+- `openspec/changes/vehicle-maintenance-app/tasks.md`
+- `openspec/changes/vehicle-maintenance-app/apply-progress.md`
+
+Creados:
+- `src/modulos/vehiculos/aplicacion/casos-uso/registrar-evento-vehiculo.test.ts`
+- `src/modulos/vehiculos/adaptadores/supabase/mapeadores-supabase.ts` y `.test.ts`
+- `src/modulos/vehiculos/adaptadores/supabase/cliente-supabase-servidor.ts` y `.test.ts`
+- `src/modulos/vehiculos/adaptadores/supabase/repositorio-vehiculos-supabase.ts` y `.test.ts`
+- `src/modulos/vehiculos/adaptadores/supabase/repositorio-eventos-supabase.ts` y `.test.ts`
+- `src/modulos/vehiculos/adaptadores/supabase/bootstrap-servidor.ts` y `.test.ts`
+- `src/modulos/vehiculos/adaptadores/supabase/proveedor-identidad-supabase-servidor.ts` y `.test.ts`
+- `src/modulos/vehiculos/adaptadores/supabase/seguridad-servidor.ts` y `.test.ts`
+- `src/modulos/vehiculos/adaptadores/supabase/pruebas/cliente-supabase-falso.ts`
+- `src/compartido/infraestructura/entorno.ts` y `.test.ts`
+
+No creados (bloqueado por sandbox, ver sección de blockers):
+- `.env.example`
+
+### Deviations del diseño
+
+- **`Vehiculo.reconstruir()`/`reconstruirVehiculo()`** (nuevo, no estaba en `diseno.md` explícitamente): necesario para que el mapeador fila→dominio pueda reconstruir un vehículo inactivo con su `fechaDesactivacion` real de la fila, sin pasar por `desactivar(fechaDesactivacion)` (que asignaría la fecha de "ahora" conceptualmente, no la fecha ya persistida). No introduce `householdId` en el dominio; solo generaliza la reconstitución de un agregado ya existente. Se considera una extensión menor y necesaria del dominio, no una desviación de las reglas de negocio.
+- **`existeMatricula` en Supabase usa `.eq('matricula', ...)` (sensible a mayúsculas/minúsculas)**, mientras el repositorio en memoria normaliza a mayúsculas antes de comparar. Se documenta como decisión: el adaptador Supabase respeta literalmente la restricción `unique (household_id, matricula)` de la migración (sensible a mayúsculas tal como está definida en SQL), en vez de añadir normalización adicional no pedida por el esquema. Si el producto necesita unicidad insensible a mayúsculas, requeriría una decisión SDD explícita y probablemente una migración (`citext` o índice funcional), fuera de alcance de PR2.
+- **Atomicidad Supabase sin RPC**: por restricción explícita de "no crear/modificar migración", `repositorio-eventos-supabase.ts` coordina en aplicación (vehículo primero, evento después) en vez de una transacción SQL real. Riesgo de consistencia documentado explícitamente en el propio archivo y aquí: si el proceso cae entre ambas escrituras, quedaría kilometraje actualizado sin evento que lo respalde; no hay rollback automático. Mitigación futura sugerida: RPC/función SQL transaccional en una migración posterior, fuera de alcance de PR2.
+- **`OperacionesBootstrap` es un puerto sin implementación real contra Postgres/Supabase** en este PR (ver blockers). La migración no otorga `insert` sobre `mv_households` a `authenticated`, así que el bootstrap real requeriría acceso administrativo directo a la base (fuera del cliente anon-key normal), que no se puede ejecutar ni probar sin un entorno Supabase real disponible en esta sesión.
+- **`.env.example` no se pudo crear** por un bloqueo de sandbox a nivel de herramienta (ver blockers). Se documentaron los nombres exactos de variables en `supabase/migrations/README.md` como mitigación.
+
+### Blockers / notas
+
+- **Sin entorno Supabase real ni local disponible en esta sesión**: no hay MCP Supabase conectado, y no se intentó levantar Supabase CLI/Docker local para este corte (el harness de RLS runtime de PR1 sigue disponible pero es un mecanismo distinto, para validar RLS de la migración, no para probar estos adaptadores de aplicación). Por eso las tareas 6–9 se validan con dobles deterministas del cliente Supabase (`pruebas/cliente-supabase-falso.ts`) en vez de integración real. Esto es un blocker de infraestructura, no una omisión: el contrato (household_id inyectado/filtrado, orden de escrituras, resolución de contexto, idempotencia del bootstrap) queda probado de forma determinista y debería seguir cumpliéndose contra una instancia real, pero **no se ha ejecutado ninguna prueba de integración contra Supabase real o local en este PR2**.
+- **`OperacionesBootstrap` sin implementación real**: el puerto está definido y probado con dobles; su implementación contra una base Postgres real (acceso administrativo aislado, fuera de RLS) queda pendiente de un entorno Supabase disponible. Debe resolverse antes de desplegar, documentado también en `supabase/migrations/README.md`.
+- **`.env.example` bloqueado por sandbox**: el entorno de ejecución del agente impide escribir cualquier archivo `.env*` (incluso sin secretos reales), tanto con la herramienta de escritura de archivos como con Bash. Se documentaron los nombres de variables en el README de migraciones como mitigación; un operador humano puede crear el archivo real.
+- **Líneas cambiadas de este corte** (PR2 completo, tareas 5–9): aproximadamente 420 inserciones/129 eliminaciones en archivos existentes más ~1.400 líneas en archivos nuevos bajo `adaptadores/supabase/` y `compartido/infraestructura/` (incluye producción y tests). Supera ampliamente el presupuesto de 400 líneas por diseño: la Review Workload Forecast de `tasks.md` ya anticipó esto y resolvió `auto-chain`/`stacked-to-main` con PR2 como un único corte autónomo verificable (no se subdivide más, siguiendo la instrucción explícita de ejecutar "solo el corte asignado por PR").
+- Dos archivos (`openspec/changes/vehicle-maintenance-app/diseno.md`, `openspec/changes/vehicle-maintenance-app/spec.md`) aparecen como modificados en `git status` sin que este apply los haya tocado; el diff preexistía al inicio de esta sesión (probablemente de una sincronización SDD previa) y se deja intacto.
+
+### Workload / PR boundary
+
+- PR boundary de este corte: PR 2 completo (tareas 5, 6, 7, 8 y 9), sin tocar PR 3 (tareas 10–13) ni la migración SQL existente.
+- Estrategia: `auto-chain`, `stacked-to-main`.
+- No se hizo commit ni se abrió PR (pendiente de confirmación explícita del usuario/orquestador).
+- Verificación de cierre: `npm test` → 16 archivos, 101 tests, todos en verde. `npm run build` → verde con Next.js 16.2.10.
+
+## Remediación fresca 4R (risk/resilience/readability/reliability) — 2026-07-11
+
+### Estado estructurado consumido/producido
+
+- Proyecto: `manteniment-vehicles`
+- Cambio activo: `vehicle-maintenance-app`
+- Artifact store: `both`; OpenSpec autoritativo.
+- Modo: corte delegado de remediación de hallazgos confirmados por revisión fresca 4R sobre el diff de PR2 sin commitear.
+- Estrategia de entrega vigente: `auto-chain`, `stacked-to-main`.
+- Límite del corte: exactamente los 5 hallazgos confirmados (1 crítico de bootstrap, 1 crítico de errores tipados, 1 warning de dominio, 1 warning de divergencia de adaptadores, 1 sugerencia de `.upsert()`→`.insert()`). No se tocó la migración SQL ni `openspec/changes/archive/`.
+- TDD estricto: activo; comando de tests `npm test`. Safety net inicial: 16 archivos, 101 tests en verde antes de tocar nada.
+
+### Hallazgos resueltos
+
+- [x] **Fix 1 (CRÍTICO)**: `sembrarHogarDeDesarrollo` ahora detecta condición de carrera en vez de duplicar en silencio. Tras CREAR un hogar (no tras encontrarlo), vuelve a consultar cuántos hogares existen con ese nombre (`OperacionesBootstrap.contarHogaresPorNombre`, nuevo método del puerto); si hay más de uno, lanza `ErrorRaceBootstrapHogar` (nuevo, tipado) en vez de continuar. Se documentó explícitamente en el comentario de módulo que esto es una mitigación de detección "single-instance/dev-only", NO una prevención real (esa requiere `unique` a nivel de BD + migración nueva, fuera de alcance). `tasks.md` sección 9 se corrigió: el checkbox de bootstrap ya no afirma sin matices que está "completo" — se dividió en orquestación/interfaz `[x]` (genuinamente hecha y probada contra dobles) más una tarea nueva explícita `[ ]` para la implementación real contra Postgres/Supabase Admin API + guardia de unicidad de BD, marcada como pendiente de entorno Supabase real.
+- [x] **Fix 2 (CRÍTICO)**: se creó `errores-adaptador.ts` con la clase tipada `ErrorAdaptadorSupabase` (campo `codigo?: string`) y el helper `errorAdaptadorSupabaseDesde(contexto, errorCrudo)`. Se actualizaron los sitios que envolvían literalmente `${error.message}` de un error real de Supabase/Postgres en los cuatro archivos (`repositorio-vehiculos-supabase.ts`: 4 sitios; `repositorio-eventos-supabase.ts`: 5 sitios incluyendo el punto atómico; `proveedor-identidad-supabase-servidor.ts`: 1 sitio, el de lectura de membresía; `cliente-supabase-servidor.ts`: 1 sitio, autenticación). Los `throw new Error(...)` restantes en `proveedor-identidad-supabase-servidor.ts` (sesión no resuelta, sin membresía, rol desconocido) y en `cliente-supabase-servidor.ts` (guardia de ejecución en servidor) NO envuelven un error crudo de Supabase con código que preservar — son aserciones de estado de aplicación, no errores Postgres erosionados — y se dejaron intactos deliberadamente para no expandir el alcance del hallazgo. En el punto de riesgo de atomicidad documentado (`repositorio-eventos-supabase.ts`, cuando el insert del evento falla DESPUÉS de que la actualización del vehículo ya se confirmó) se añadió una única llamada `console.error` estructurada con `householdId`, `vehiculoId`, `codigo` y `mensaje` antes de relanzar, como señal grepeable para la reconciliación manual futura. Se decidió NO poner ese mismo log en el fallo de la actualización del propio vehículo (rama anterior) porque ahí todavía no hay ningún estado inconsistente (el evento nunca llega a confirmarse), así que no aplica el mismo riesgo — se documentó esta distinción explícitamente en el código y en el test.
+- [x] **Fix 3 (WARNING)**: se añadió `validarConsistenciaEstadoDesactivacion(estado, fechaDesactivacion)` al constructor privado de `Vehiculo` (aplica a todos los puntos de entrada: `crear`, `desactivar`, `corregirKilometraje` y `reconstruir`). Rechaza `estado: 'activo'` con `fechaDesactivacion` definida, y `estado: 'inactivo'` sin `fechaDesactivacion`, lanzando `ErrorDominio` (el mismo tipo ya usado en el resto del archivo).
+- [x] **Fix 4 (WARNING)**: se eliminó la normalización `trim().toLocaleUpperCase('es')` de `RepositorioVehiculosEnMemoria.existeMatricula`, que hacía la comparación insensible a mayúsculas mientras el adaptador Supabase real (`.eq('matricula', matricula)`) y la restricción `unique (household_id, matricula)` de la migración son sensibles a mayúsculas. Ahora ambos adaptadores comparan igual (sensible a mayúsculas). No existía ningún test previo que asertara explícitamente el rechazo insensible a mayúsculas (se buscó con `rg` en toda la suite); se añadió un test nuevo en `vehiculos-casos-uso.test.ts` que confirma el comportamiento real correcto: la misma matrícula con distinta capitalización SÍ puede registrarse en el mismo hogar.
+- [x] **Fix 5 (SUGERENCIA)**: `repositorio-eventos-supabase.ts` usaba `.upsert(fila)` tanto en `guardar()` como en el tramo de escritura del evento dentro de `registrarEventoYActualizarKilometraje()`, lo que sobrescribiría en silencio un evento existente ante una colisión de id en vez de fallar por violación de restricción. Se cambiaron ambos sitios a `.insert(fila)`. La escritura de `mv_vehiculos` (que sí es mutable) conserva `.upsert()` sin cambios.
+
+### TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| Fix 1: detección de condición de carrera en bootstrap | `adaptadores/supabase/bootstrap-servidor.test.ts` | Unit (operaciones falsas) | ✅ 2/2 antes de modificar | ✅ Nuevo test con `contarHogaresPorNombre` devolviendo 2 falló: `ErrorRaceBootstrapHogar` era `undefined` (no existía) | ✅ 3/3 tras añadir el método al puerto + la verificación post-creación + la clase de error | ✅ Verificado que el conteo NO se llama en el camino idempotente (segunda ejecución encuentra el hogar, no lo crea) | ✅ Comentario extenso de módulo explicando el alcance real de la mitigación (detección, no prevención) |
+| Fix 2: `ErrorAdaptadorSupabase` (helper puro) | `adaptadores/supabase/errores-adaptador.test.ts` | Unit (función pura) | N/A (módulo nuevo) | ⚠️ Implementación y test del helper puro escritos juntos (utilidad de soporte, no el comportamiento principal del hallazgo); ver nota de honestidad TDD abajo | ✅ 2/2 | ✅ Caso con código y caso sin código (error de red) | ➖ Sin refactor necesario, módulo nuevo pequeño |
+| Fix 2: repositorio de vehículos | `adaptadores/supabase/repositorio-vehiculos-supabase.test.ts` | Unit/contract (cliente falso) | ✅ 4/4 antes de modificar | ✅ 4 tests nuevos fallaron: error capturado no era instancia de `ErrorAdaptadorSupabase` | ✅ 8/8 tras reemplazar los 4 `throw new Error` por `errorAdaptadorSupabaseDesde` | ✅ Cubiertos `guardar`, `buscarPorId`, `listar`, `existeMatricula` con códigos `23505`/`42501` | ➖ Sin refactor adicional |
+| Fix 2 + Fix 5: repositorio de eventos + log de atomicidad + insert | `adaptadores/supabase/repositorio-eventos-supabase.test.ts` | Unit/contract (cliente falso) | ✅ 6/6 antes de modificar | ✅ 8 tests nuevos fallaron (5 de tipado de error + 1 de `console.error` + 2 de `.insert()` vs `.upsert()`) | ✅ 13/13 tras reemplazar los 3 `throw new Error` restantes, añadir el log estructurado en el punto real de riesgo, y cambiar `.upsert()`→`.insert()` en ambos sitios de escritura de eventos | ✅ Cubiertos: fallo de vehículo (sin log, no hay inconsistencia todavía) vs. fallo de evento (con log, sí hay inconsistencia); evento histórico sin vehículo actualizado; violación `23505` de id duplicado con `.insert()` | ✅ Comentarios distinguiendo explícitamente los dos puntos de fallo y por qué solo uno necesita el log de reconciliación |
+| Fix 2: proveedor de identidad de servidor | `adaptadores/supabase/proveedor-identidad-supabase-servidor.test.ts` | Unit (cliente falso) | ✅ 3/3 antes de modificar | ✅ 1 test nuevo falló: error capturado no era instancia de `ErrorAdaptadorSupabase` | ✅ 4/4 tras reemplazar el único `throw new Error` que envolvía un error crudo de Supabase (lectura de membresía) | ➖ Un solo caso relevante (los otros 3 `throw` no envuelven error crudo, quedaron fuera de alcance deliberadamente) | ➖ Sin refactor adicional |
+| Fix 2: cliente de servidor | `adaptadores/supabase/cliente-supabase-servidor.test.ts` | Unit (`vi.mock`) | ✅ 3/3 antes de modificar | ✅ 1 test nuevo falló: error capturado no era instancia de `ErrorAdaptadorSupabase` | ✅ 4/4 tras reemplazar el `throw new Error` de autenticación | ✅ Cubierto con y sin código (`invalid_credentials`) | ➖ Sin refactor adicional |
+| Fix 3: consistencia estado/fechaDesactivacion | `dominio/vehiculo.test.ts` | Unit/domain | ✅ 11/11 antes de modificar | ✅ 2 tests nuevos fallaron: `reconstruirVehiculo` con par inconsistente no lanzaba nada | ✅ 13/13 tras añadir `validarConsistenciaEstadoDesactivacion` al constructor privado | ✅ Cubiertos ambos pares inconsistentes: activo+fecha, inactivo+sin fecha | ✅ Validación colocada en el constructor privado compartido, no solo en `reconstruir`, para que aplique a todos los entry points |
+| Fix 4: divergencia de `existeMatricula` | `aplicacion/casos-uso/vehiculos-casos-uso.test.ts` | Application (repositorio en memoria real) | ✅ 9/9 antes de modificar | ✅ 1 test nuevo falló: registrar la misma matrícula con distinta capitalización lanzaba `ErrorDominio` (comportamiento insensible a mayúsculas aspiracional/incorrecto) | ✅ 10/10 tras eliminar la normalización de `RepositorioVehiculosEnMemoria.existeMatricula` | ➖ Un solo caso relevante: no existía ningún test previo que dependiera del comportamiento insensible a mayúsculas (se verificó con búsqueda en toda la suite antes de tocar el código) | ✅ Función `normalizarMatricula` eliminada por completo (quedó sin uso) |
+
+### Test Summary
+
+- **Total tests nuevos en este corte**: 24 (1 archivo de test nuevo: `errores-adaptador.test.ts` con 2 tests; más tests añadidos en 6 archivos existentes).
+- **Total tests passing (suite completa)**: 120/120 (`npm test`), 17 archivos.
+- **Layers usadas**: Unit/domain, Application (con repositorio en memoria real), Unit/contract con dobles del cliente Supabase, Unit puro (helper de error).
+- **Approval tests**: 0 estrictos; 1 caso marginal documentado abajo (helper puro de Fix 2 escrito junto con su test).
+- **Pure functions creadas/ampliadas**: `errorAdaptadorSupabaseDesde`, `validarConsistenciaEstadoDesactivacion`.
+
+### Nota de honestidad TDD — helper `errorAdaptadorSupabaseDesde`
+
+El helper puro `errorAdaptadorSupabaseDesde` (Fix 2) se escribió junto con su test (`errores-adaptador.test.ts`) en vez de seguir un RED→GREEN estricto: es una utilidad de soporte nueva y trivial (mapear `{message, code}` a una clase de error), no el comportamiento observable que pide el hallazgo. El comportamiento real exigido por Fix 2 — que cada sitio de los cuatro adaptadores lance `ErrorAdaptadorSupabase` con el `codigo` correcto — sí siguió RED→GREEN genuino en cada uno de los cuatro archivos de test de adaptador (ver tabla arriba), incluyendo ejecución real de los tests fallando antes de tocar producción.
+
+### Comandos ejecutados (resumen)
+
+- `npm test` (safety net inicial): 16 archivos, 101 tests.
+- Tras cada RED: `npx vitest run <archivo>` confirmando fallo real (assertion o instancia de error incorrecta).
+- Tras cada GREEN: `npx vitest run <archivo>` confirmando verde.
+- `npm test` (suite completa, verificado tras cada fix): 17 archivos, 120 tests, siempre en verde al cierre.
+- `npm run build`: verde con Next.js 16.2.10 y TypeScript sin errores tras todos los fixes.
+- `rg` manual para confirmar que no quedan `throw new Error` envolviendo error crudo de Supabase sin convertir, y que no queda `.upsert()` para la tabla de eventos.
+
+### Archivos cambiados
+
+Modificados:
+- `src/modulos/vehiculos/adaptadores/supabase/bootstrap-servidor.ts`
+- `src/modulos/vehiculos/adaptadores/supabase/bootstrap-servidor.test.ts`
+- `src/modulos/vehiculos/adaptadores/supabase/repositorio-vehiculos-supabase.ts`
+- `src/modulos/vehiculos/adaptadores/supabase/repositorio-vehiculos-supabase.test.ts`
+- `src/modulos/vehiculos/adaptadores/supabase/repositorio-eventos-supabase.ts`
+- `src/modulos/vehiculos/adaptadores/supabase/repositorio-eventos-supabase.test.ts`
+- `src/modulos/vehiculos/adaptadores/supabase/proveedor-identidad-supabase-servidor.ts`
+- `src/modulos/vehiculos/adaptadores/supabase/proveedor-identidad-supabase-servidor.test.ts`
+- `src/modulos/vehiculos/adaptadores/supabase/cliente-supabase-servidor.ts`
+- `src/modulos/vehiculos/adaptadores/supabase/cliente-supabase-servidor.test.ts`
+- `src/modulos/vehiculos/adaptadores/supabase/pruebas/cliente-supabase-falso.ts` (soporte de `.insert()` para el doble de test)
+- `src/modulos/vehiculos/dominio/vehiculo.ts`
+- `src/modulos/vehiculos/dominio/vehiculo.test.ts`
+- `src/modulos/vehiculos/aplicacion/pruebas/repositorio-vehiculos-en-memoria.ts`
+- `src/modulos/vehiculos/aplicacion/casos-uso/vehiculos-casos-uso.test.ts`
+- `openspec/changes/vehicle-maintenance-app/tasks.md` (sección 9)
+- `openspec/changes/vehicle-maintenance-app/apply-progress.md`
+
+Creados:
+- `src/modulos/vehiculos/adaptadores/supabase/errores-adaptador.ts`
+- `src/modulos/vehiculos/adaptadores/supabase/errores-adaptador.test.ts`
+
+### Desviaciones del diseño
+
+- Ninguna desviación nueva de reglas de negocio. Todos los cambios son correcciones de robustez/tipado/consistencia sobre código ya implementado en PR2, sin tocar la migración SQL ni ampliar el alcance de los 5 hallazgos confirmados.
+- La nota histórica de "Deviations del diseño" de la sección PR2 original (más arriba en este mismo archivo) documentaba `existeMatricula` en Supabase como sensible a mayúsculas "por decisión", contrastándolo con el repositorio en memoria insensible a mayúsculas. Esa nota histórica se deja intacta (describe correctamente lo que se decidió y por qué en ese momento); este corte corrige la implementación del repositorio en memoria para que coincida con esa decisión ya documentada, en vez of reescribir la historia.
+
+### Blockers / notas
+
+- Fix 1 sigue sin implementación real de `OperacionesBootstrap` contra Postgres/Supabase Admin API (ya documentado como blocker en la sección PR2 original): no hay entorno Supabase real ni local disponible en esta sesión. La nueva tarea `[ ]` en `tasks.md` sección 9 deja esto explícito como pendiente, junto con la guardia de unicidad de base de datos que requeriría una migración nueva.
+- Ningún hallazgo de los 5 quedó sin completar: los 5 tienen ciclo RED→GREEN ejecutado y verificado, con la única excepción del sub-trabajo de infraestructura real de Fix 1 (implementación contra Postgres real), que ya estaba fuera de alcance por falta de entorno Supabase y se documenta como tarea pendiente explícita, no como fix incompleto.
+
+### Workload / PR boundary
+
+- PR boundary de este corte: remediación de 5 hallazgos confirmados de revisión fresca 4R sobre el diff PR2 sin commitear. No se tocó la migración SQL ni `openspec/changes/archive/`.
+- Estrategia: `auto-chain`, `stacked-to-main`.
+- No se hizo commit (pendiente de confirmación explícita del usuario/orquestador).
+- Verificación de cierre: `npm test` → 17 archivos, 120 tests, todos en verde. `npm run build` → verde con Next.js 16.2.10.

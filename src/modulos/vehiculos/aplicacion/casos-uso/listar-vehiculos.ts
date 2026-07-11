@@ -10,7 +10,7 @@ export type DependenciasListarVehiculos = Readonly<{
 export async function listarVehiculos(
   dependencias: DependenciasListarVehiculos,
 ): Promise<Vehiculo[]> {
-  await dependencias.proveedorIdentidad.obtenerActorActual();
+  const { householdId } = await dependencias.proveedorIdentidad.obtenerContexto();
 
-  return dependencias.repositorioVehiculos.listar();
+  return dependencias.repositorioVehiculos.listar(householdId);
 }

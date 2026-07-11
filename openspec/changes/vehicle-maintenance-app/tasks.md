@@ -19,8 +19,9 @@ Chain strategy: stacked-to-main
 
 ## Decisiones fijadas para implementar
 
-- La matrícula en `mv_vehiculos.matricula` será única globalmente dentro de esta app, incluyendo vehículos inactivos. Esto evita reutilizar matrículas históricas y simplifica integridad en Supabase compartido.
-- El MVP puede usar un actor temporal fijo, pero todo acceso a datos de aplicación debe pasar por backend/server actions o adaptadores de servidor.
+- La matrícula en `mv_vehiculos` es única POR HOGAR (`unique (household_id, matricula)`), incluyendo vehículos inactivos. La misma matrícula puede existir en hogares distintos. Regla ya fijada por la migración `20260710000000_supabase_persistence_short.sql` (sustituye la antigua unicidad global).
+- El MVP puede usar un contexto temporal fijo (actor `admin` + `householdId` de desarrollo), pero todo acceso a datos de aplicación debe pasar por backend/server actions o adaptadores de servidor.
+- El hogar (`householdId`) entra por `ProveedorIdentidad` como contexto de sesión; los puertos de persistencia reciben `householdId` explícito por llamada. El dominio permanece agnóstico al hogar.
 - No se permite usar claves privilegiadas o `service_role` en código cliente.
 - No se permite acceso browser-side directo a Supabase para datos de vehículos/eventos del MVP.
 - El registro de evento + actualización de kilometraje debe exponerse como operación atómica/coordinada de aplicación y adaptador: no puede quedar evento guardado sin actualizar kilometraje cuando corresponde.
@@ -36,10 +37,10 @@ Rollback: revertir este PR elimina la base sin tocar Supabase ni datos reales.
 
 ### PR 2 — Persistencia Supabase segura desde servidor
 
-Estado inicial: PR 1 integrado.
-Estado final: migraciones `mv_*`, adaptador Supabase de servidor y contrato atómico para evento + kilometraje.
-Verificación: tests de mapeadores/contratos; revisión de que no hay Supabase app-data en cliente ni claves privilegiadas expuestas.
-Rollback: revertir migraciones/adaptadores antes de usar datos productivos o aplicar migración inversa documentada.
+Estado inicial: PR 1 integrado. La migración multi-tenant ya existe (`supabase/migrations/20260710000000_supabase_persistence_short.sql`, cuatro tablas `mv_*` con RLS por hogar); PR2 NO crea una migración nueva de vehículos/eventos.
+Estado final: puertos y `ProveedorIdentidad` de PR1 reabiertos y scoped por hogar; adaptador Supabase de servidor mapeando contra el esquema existente; resolución del hogar actual para el actor temporal; contrato atómico para evento + kilometraje.
+Verificación: `npm test` con tests de mapeadores/contratos y aislamiento por hogar; revisión de que no hay Supabase app-data en cliente ni claves privilegiadas expuestas.
+Rollback: revertir adaptadores/puertos; NO se toca la migración ya aplicada/versionada.
 
 ### PR 3 — Interfaz MVP y server actions
 
@@ -80,40 +81,59 @@ Rollback: revertir UI/actions sin alterar dominio ni migraciones.
 - [x] GREEN: crear repositorios en memoria para pruebas en `src/modulos/vehiculos/aplicacion/pruebas/`.
 - [x] REFACTOR: asegurar que los casos de uso reciben `ProveedorIdentidad`/actor temporal sin aplicar matriz de permisos real.
 
-### 5. PR 2 — Crear migraciones Supabase `mv_*`
+### 5. PR 2 (ENMIENDA de PR1) — Contexto de hogar en puertos, proveedor y casos de uso
 
-- [ ] RED: documentar/crear prueba de contrato SQL o snapshot en `supabase/migrations/*.test.ts` si el harness lo permite; si no, añadir checklist verificable en `supabase/migrations/README.md` con guardarraíles para Supabase compartido/producción.
-- [ ] GREEN: crear migración en `supabase/migrations/` para `mv_vehiculos` y `mv_eventos_vehiculo` con checks, claves foráneas e índices, respetando los guardarraíles documentados.
-- [ ] GREEN: imponer unicidad global de `mv_vehiculos.matricula`, incluyendo vehículos inactivos.
-- [ ] GREEN: incluir prefijo `mv_` en todos los objetos SQL de esta app.
-- [ ] GREEN: dejar las tablas protegidas a nivel Supabase antes de ejecución real: RLS activado sin políticas permisivas por defecto, revocación explícita de `anon`/`authenticated`, o excepción privada documentada y autorizada.
-- [ ] REFACTOR: no crear tablas futuras de adjuntos/OCR/manuales; solo reservar nombres en documentación si hace falta.
+> Reabre trabajo YA COMPLETADO en PR1. Las firmas sin hogar (`existeMatricula(matricula)`, `ProveedorIdentidad.obtenerActorActual()`) contradicen el esquema real (`unique (household_id, matricula)`, RLS por hogar) y deben adoptar scoping por hogar ANTES de construir el adaptador Supabase. Marcar los commits como enmienda de PR1.
 
-### 6. PR 2 — Implementar adaptador Supabase solo de servidor
+- [x] RED: actualizar `src/modulos/vehiculos/aplicacion/casos-uso/vehiculos-casos-uso.test.ts` para que el caso de matrícula duplicada sea POR HOGAR: rechazar duplicado dentro del mismo `householdId` y (nuevo assert) PERMITIR la misma matrícula en un `householdId` distinto. Los tests deben fallar contra las firmas actuales.
+- [x] GREEN: introducir `ContextoAplicacion { actor: ActorAplicacion; householdId: Identificador }` y cambiar `ProveedorIdentidad` a `obtenerContexto(): Promise<ContextoAplicacion>` en `src/modulos/vehiculos/aplicacion/puertos/proveedor-identidad.ts`.
+- [x] GREEN: cambiar `RepositorioVehiculos` a firmas scoped por hogar: `guardar(householdId, vehiculo)`, `buscarPorId(householdId, id)`, `listar(householdId)`, `existeMatricula(householdId, matricula)` en `repositorio-vehiculos.ts`.
+- [x] GREEN: cambiar `RepositorioEventosVehiculo` y `UnidadTrabajoVehiculos` para recibir `householdId` explícito en `repositorio-eventos-vehiculo.ts`.
+- [x] GREEN: actualizar los cinco casos de uso (`registrar-vehiculo`, `listar-vehiculos`, `desactivar-vehiculo`, `registrar-evento-vehiculo`, `corregir-kilometraje`) para resolver `obtenerContexto()` y propagar `householdId` a los repositorios.
+- [x] GREEN: actualizar los dobles en memoria: `RepositorioVehiculosEnMemoria` (indexar por `(householdId, id)` y modelar `unique (household_id, matricula)`), `RepositorioEventosVehiculoEnMemoria` y `ProveedorIdentidadTemporal` (devolver actor `admin` + `householdId` fijo de desarrollo).
+- [x] TRIANGULATE: añadir prueba de aislamiento: `buscarPorId`/`listar` de un hogar no devuelven vehículos de otro hogar.
+- [x] REFACTOR: confirmar que el dominio (`Vehiculo`, `EventoVehiculo`) sigue sin conocer `householdId`; el hogar vive solo en aplicación/adaptadores. `npm test` en verde.
 
-- [ ] RED: crear pruebas de mapeadores en `src/modulos/vehiculos/adaptadores/supabase/mapeadores-supabase.test.ts`.
-- [ ] GREEN: implementar `cliente-supabase-servidor.ts`, `repositorio-vehiculos-supabase.ts`, `repositorio-eventos-supabase.ts` y `mapeadores-supabase.ts`.
-- [ ] GREEN: validar variables en `src/compartido/infraestructura/entorno.ts` sin exponer claves privilegiadas al cliente.
-- [ ] GREEN: asegurar que el cliente Supabase de datos de app se importa solo desde server actions, Server Components o adaptadores de servidor.
-- [ ] REFACTOR: buscar y eliminar cualquier acceso browser-side a Supabase para `mv_vehiculos`/`mv_eventos_vehiculo`.
+### 6. PR 2 — Adaptar al esquema Supabase existente (sin nueva migración)
 
-### 7. PR 2 — Garantizar atomicidad evento + kilometraje
+> La migración `supabase/migrations/20260710000000_supabase_persistence_short.sql` YA existe (cuatro tablas `mv_*`, RLS por hogar). NO crear una migración nueva de vehículos/eventos ni tocar la existente.
 
-- [ ] RED: crear prueba de contrato en `src/modulos/vehiculos/aplicacion/casos-uso/registrar-evento-vehiculo.test.ts` que falle si se guarda evento y falla la actualización de kilometraje requerida.
-- [ ] GREEN: implementar el contrato atómico/coordinado definido en el puerto de aplicación.
-- [ ] GREEN: en Supabase, resolver la operación con RPC/transacción SQL o mecanismo equivalente de servidor; si se usa coordinación en aplicación, documentar compensación y error de consistencia en `repositorio-eventos-supabase.ts`.
-- [ ] TRIANGULATE: probar evento histórico que guarda evento sin actualizar kilometraje.
-- [ ] REFACTOR: dejar explícito en comentarios técnicos mínimos por qué no son dos llamadas independientes inseguras.
+- [x] RED: crear prueba de contrato/snapshot en `src/modulos/vehiculos/adaptadores/supabase/mapeadores-supabase.test.ts` que verifique el mapeo dominio↔columnas REALES: `household_id`, `estado`/`fecha_desactivacion` coherentes, `fecha_creacion` (no `creado_en`), FK compuesta `(household_id, vehiculo_id)`.
+- [x] GREEN: implementar mapeadores contra el esquema real; NO mapear columnas inexistentes (`creado_en`/`actualizado_en` no existen en `mv_vehiculos`).
+- [x] GREEN: alinear tipos de fecha con `timestamptz` (`fecha_compra`, `fecha`, `proximo_vencimiento_fecha`) según la migración.
+- [x] GREEN: incluir prefijo `mv_` en toda referencia SQL de esta app.
+- [x] REFACTOR: no crear tablas futuras de adjuntos/OCR/manuales; solo reservar nombres en documentación si hace falta.
 
-### 8. PR 2 — Frontera auth/RLS temporal segura
+### 7. PR 2 — Implementar adaptador Supabase solo de servidor
 
-- [ ] RED: crear prueba/checklist en `src/modulos/vehiculos/adaptadores/supabase/seguridad-servidor.test.ts` o documentación verificable que detecte imports cliente indebidos.
-- [ ] GREEN: implementar `src/modulos/vehiculos/aplicacion/puertos/proveedor-identidad.ts` y adaptador temporal de actor fijo en servidor.
-- [ ] GREEN: documentar en `supabase/migrations/README.md` que auth/RLS real queda diferido y que cualquier política temporal debe ser explícita para entorno privado.
-- [ ] GREEN: confirmar que no existe `service_role` ni clave privilegiada en código cliente, `.env.example` público o componentes React.
-- [ ] REFACTOR: mantener la autorización futura fuera del dominio y fuera de componentes UI.
+- [x] RED: crear pruebas de los repositorios Supabase que verifiquen que toda escritura inyecta `household_id` y toda lectura filtra por `household_id`.
+- [x] GREEN: implementar `cliente-supabase-servidor.ts`, `repositorio-vehiculos-supabase.ts`, `repositorio-eventos-supabase.ts` implementando los puertos scoped por hogar de la tarea 5.
+- [x] GREEN: validar variables en `src/compartido/infraestructura/entorno.ts` sin exponer claves privilegiadas al cliente.
+- [x] GREEN: asegurar que el cliente Supabase de datos de app se importa solo desde server actions, Server Components o adaptadores de servidor.
+- [x] REFACTOR: buscar y eliminar cualquier acceso browser-side a Supabase para `mv_vehiculos`/`mv_eventos_vehiculo`.
 
-### 9. PR 3 — Validación y server actions
+### 8. PR 2 — Garantizar atomicidad evento + kilometraje
+
+- [x] RED: crear prueba de contrato en `src/modulos/vehiculos/aplicacion/casos-uso/registrar-evento-vehiculo.test.ts` que falle si se guarda evento y falla la actualización de kilometraje requerida.
+- [x] GREEN: implementar el contrato atómico/coordinado definido en el puerto de aplicación.
+- [x] GREEN: en Supabase, resolver la operación con RPC/transacción SQL o mecanismo equivalente de servidor; si se usa coordinación en aplicación, documentar compensación y error de consistencia en `repositorio-eventos-supabase.ts`.
+- [x] TRIANGULATE: probar evento histórico que guarda evento sin actualizar kilometraje.
+- [x] REFACTOR: dejar explícito en comentarios técnicos mínimos por qué no son dos llamadas independientes inseguras.
+
+### 9. PR 2 — Frontera auth/RLS temporal segura y resolución de hogar
+
+> Decisión de credencial (§15.6 del diseño) resuelta: el adaptador de servidor se autentica como un usuario `auth.users` real, sembrado por bootstrap server-only junto a su hogar y membresía en `mv_household_members`, e inicia sesión server-side como ese usuario. RLS sigue activa como frontera real; `service_role` queda descartado para esta app.
+
+- [x] RED: crear prueba/checklist en `src/modulos/vehiculos/adaptadores/supabase/seguridad-servidor.test.ts` o documentación verificable que detecte imports cliente indebidos y confirme ausencia de `service_role`.
+- [x] RED: crear prueba/checklist para el bootstrap server-only que verifique que sembrar usuario+hogar+membresía es idempotente (no duplica el hogar/usuario de desarrollo en reejecuciones).
+- [x] GREEN (orquestación/interfaz implementada y probada contra dobles; ver tarea de abajo para implementación real): implementar el bootstrap server-only que crea (o reutiliza si ya existe) un `auth.users` de desarrollo, su `mv_households` y la fila de membresía `admin` en `mv_household_members`. Incluye detección de condición de carrera (re-query tras crear + `ErrorRaceBootstrapHogar` si hay duplicados), documentada como mitigación single-instance/dev-only, no como prevención real (esa requiere constraint `unique` + migración).
+- [ ] GREEN (pendiente, fuera de este PR): implementar `OperacionesBootstrap` contra Postgres/Supabase Admin API real (no dobles) + añadir guardia de unicidad/bloqueo a nivel de base de datos (constraint `unique` en `mv_households.nombre` o mecanismo equivalente) antes de usar este bootstrap en un entorno multi-instancia o de producción. Requiere entorno Supabase real/local disponible y probablemente una nueva migración; no se puede completar en esta sesión (ver blockers en `apply-progress.md`).
+- [x] GREEN: implementar el adaptador de servidor de `ProveedorIdentidad` que inicia sesión server-side como ese usuario sembrado y resuelve el contexto (`actor` + `householdId`) a partir del `mv_households.id` real devuelto por el bootstrap — no un valor arbitrario.
+- [x] GREEN: documentar en `supabase/migrations/README.md` la decisión de credencial (usuario real + RLS, no `service_role`) y el procedimiento de siembra del hogar/usuario de desarrollo.
+- [x] GREEN: confirmar que no existe `service_role` ni clave privilegiada en código cliente, `.env.example` público o componentes React.
+- [x] REFACTOR: mantener la autorización futura fuera del dominio y fuera de componentes UI.
+
+### 10. PR 3 — Validación y server actions
 
 - [ ] RED: crear pruebas de esquemas en `src/modulos/vehiculos/interfaz/validacion/esquemas-vehiculo.test.ts` y `esquemas-evento.test.ts` para campos obligatorios, coste opcional/no negativo y próximos vencimientos opcionales.
 - [ ] GREEN: implementar esquemas Zod en `src/modulos/vehiculos/interfaz/validacion/`.
@@ -121,7 +141,7 @@ Rollback: revertir UI/actions sin alterar dominio ni migraciones.
 - [ ] GREEN: las actions deben devolver errores de validación comprensibles para alta incompleta y entradas inválidas.
 - [ ] REFACTOR: no añadir API REST interna salvo necesidad real.
 
-### 10. PR 3 — Pantallas mínimas de vehículos
+### 11. PR 3 — Pantallas mínimas de vehículos
 
 - [ ] RED: crear pruebas de componentes o validaciones de render mínimas en `src/modulos/vehiculos/interfaz/componentes/*.test.tsx` si el setup elegido soporta React Testing Library; si no, registrar verificación manual reproducible.
 - [ ] GREEN: implementar `src/app/vehiculos/page.tsx`, `src/app/vehiculos/nuevo/page.tsx`, `formulario-vehiculo.tsx` y `lista-vehiculos.tsx`.
@@ -129,7 +149,7 @@ Rollback: revertir UI/actions sin alterar dominio ni migraciones.
 - [ ] GREEN: permitir alta de vehículo y desactivación lógica desde server action.
 - [ ] REFACTOR: mantener componentes presentacionales pequeños; la lógica de negocio no vive en React.
 
-### 11. PR 3 — Historial, eventos, corrección de kilometraje y vencimientos
+### 12. PR 3 — Historial, eventos, corrección de kilometraje y vencimientos
 
 - [ ] RED: cubrir con pruebas de caso de uso o verificación manual los flujos de registrar mantenimiento, registrar avería, evento con km mayor, evento histórico, corrección manual y vencimiento por km/fecha.
 - [ ] GREEN: implementar `src/app/vehiculos/[vehiculoId]/page.tsx`, `src/app/vehiculos/[vehiculoId]/eventos/nuevo/page.tsx`, `formulario-evento.tsx` y `historial-eventos.tsx`.
@@ -139,12 +159,12 @@ Rollback: revertir UI/actions sin alterar dominio ni migraciones.
 - [ ] GREEN: mostrar estado calculado de vencimiento sin persistir estado derivado.
 - [ ] REFACTOR: evitar dashboard avanzado; mantener solo lo necesario del MVP.
 
-### 12. Verificación final del MVP
+### 13. Verificación final del MVP
 
 - [ ] Ejecutar `npm test` y guardar evidencia en el reporte de aplicación/verificación.
-- [ ] Revisar que el dominio no importa Next.js, React, Supabase, Zod ni Tailwind.
+- [ ] Revisar que el dominio no importa Next.js, React, Supabase, Zod ni Tailwind, ni conoce `householdId`.
 - [ ] Revisar que todas las tablas/artefactos SQL usan prefijo `mv_`.
-- [ ] Revisar que `mv_vehiculos.matricula` es única globalmente.
+- [ ] Revisar que la unicidad de matrícula es por hogar (`unique (household_id, matricula)`) y que existe aislamiento por hogar en repositorios y adaptador.
 - [ ] Revisar que evento + actualización de kilometraje usa contrato atómico/coordinado.
 - [ ] Revisar que no hay acceso inseguro desde navegador a Supabase para datos de app.
 - [ ] Revisar que no hay claves privilegiadas en cliente.
@@ -154,26 +174,28 @@ Rollback: revertir UI/actions sin alterar dominio ni migraciones.
 
 | Criterio de spec/diseño | Tareas que lo cubren |
 |---|---|
-| Alta de vehículo con datos obligatorios | 2, 4, 9, 10 |
-| Rechazo de alta incompleta | 2, 9, 10 |
-| Listado de flota con activos/inactivos | 4, 10 |
-| Desactivación lógica sin perder histórico | 2, 4, 10, 11 |
-| Registro de mantenimiento y avería | 3, 4, 9, 11 |
-| Evento con km mayor actualiza kilometraje | 3, 4, 7, 11 |
-| Evento histórico no reduce kilometraje | 3, 4, 7, 11 |
-| Corrección manual arriba/abajo | 2, 4, 11 |
-| Vencimiento por km o fecha, lo primero | 3, 4, 11 |
-| Roles `admin`/`editor` como concepto de dominio | 3, 4, 8 |
-| Supabase compartido con prefijo `mv_` | 5, 6, 12 |
-| Backend/server actions como frontera de datos | 6, 8, 9, 12 |
-| Sin `service_role` ni Supabase app-data en cliente | 6, 8, 12 |
-| Matrícula única global incluyendo inactivos | 4, 5, 12 |
-| Fuera de alcance: OCR/IA/adjuntos/notificaciones/dashboard | 5, 11, 12 |
+| Alta de vehículo con datos obligatorios | 2, 4, 5, 10, 11 |
+| Rechazo de alta incompleta | 2, 10, 11 |
+| Listado de flota con activos/inactivos | 4, 5, 11 |
+| Desactivación lógica sin perder histórico | 2, 4, 11, 12 |
+| Registro de mantenimiento y avería | 3, 4, 10, 12 |
+| Evento con km mayor actualiza kilometraje | 3, 4, 8, 12 |
+| Evento histórico no reduce kilometraje | 3, 4, 8, 12 |
+| Corrección manual arriba/abajo | 2, 4, 12 |
+| Vencimiento por km o fecha, lo primero | 3, 4, 12 |
+| Roles `admin`/`editor` como concepto de dominio | 3, 4, 9 |
+| Adaptar al esquema Supabase existente con prefijo `mv_` | 6, 7, 13 |
+| Backend/server actions como frontera de datos | 7, 9, 10, 13 |
+| Sin `service_role` ni Supabase app-data en cliente | 7, 9, 13 |
+| Matrícula única por hogar incluyendo inactivos | 4, 5, 6, 13 |
+| Aislamiento por hogar (multi-tenant) y contexto de sesión | 5, 6, 7, 9, 13 |
+| Fuera de alcance: OCR/IA/adjuntos/notificaciones/dashboard | 6, 12, 13 |
 
 ## Riesgos y controles
 
 - Riesgo: el cambio completo supera ampliamente 400 líneas. Control: aplicar en PRs encadenados y no iniciar `sdd-apply` hasta elegir `Chain strategy`.
-- Riesgo: Supabase compartido sin auth/RLS real puede inducir accesos inseguros. Control: acceso a app-data solo desde servidor y actor temporal explícito.
+- Riesgo: acceso inseguro a Supabase compartido. Control: RLS por hogar ya activa en la migración; acceso a app-data solo desde servidor, con actor+hogar resueltos vía usuario real sembrado (no `service_role`).
 - Riesgo: inconsistencia entre evento y kilometraje. Control: contrato atómico/coordinado obligatorio y prueba de fallo parcial.
-- Riesgo: la regla de matrícula cambia en producto. Control: se fija unicidad global para MVP; cambiarla requerirá migración y nueva decisión SDD.
+- Riesgo: la regla de matrícula cambia en producto. Control: unicidad por hogar (`unique (household_id, matricula)`) ya fijada en la migración; cambiarla requeriría nueva migración y decisión SDD.
+- Riesgo: credencial del adaptador MVP frente a RLS (`auth.uid()`). Control: resuelto — usuario `auth.users` real sembrado por bootstrap server-only + login server-side (tarea 9); `service_role` descartado. RLS sigue como frontera real.
 - Riesgo: `npm test` está configurado pero el repo es greenfield. Control: PR 1 crea runner antes de implementar lógica.

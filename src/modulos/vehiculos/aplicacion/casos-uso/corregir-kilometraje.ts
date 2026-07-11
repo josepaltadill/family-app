@@ -17,14 +17,15 @@ export async function corregirKilometraje(
   dependencias: DependenciasCorregirKilometraje,
   entrada: EntradaCorregirKilometraje,
 ): Promise<void> {
-  await dependencias.proveedorIdentidad.obtenerActorActual();
-  const vehiculo = await dependencias.repositorioVehiculos.buscarPorId(entrada.vehiculoId);
+  const { householdId } = await dependencias.proveedorIdentidad.obtenerContexto();
+  const vehiculo = await dependencias.repositorioVehiculos.buscarPorId(householdId, entrada.vehiculoId);
 
   if (!vehiculo) {
     throw new ErrorDominio('No existe el vehículo indicado.');
   }
 
   await dependencias.repositorioVehiculos.guardar(
+    householdId,
     vehiculo.corregirKilometraje(entrada.kilometrosActuales),
   );
 }

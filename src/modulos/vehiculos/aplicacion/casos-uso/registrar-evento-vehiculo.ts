@@ -18,8 +18,8 @@ export async function registrarEventoVehiculo(
   dependencias: DependenciasRegistrarEventoVehiculo,
   entrada: EntradaRegistrarEventoVehiculo,
 ): Promise<EventoVehiculo> {
-  await dependencias.proveedorIdentidad.obtenerActorActual();
-  const vehiculo = await dependencias.repositorioVehiculos.buscarPorId(entrada.vehiculoId);
+  const { householdId } = await dependencias.proveedorIdentidad.obtenerContexto();
+  const vehiculo = await dependencias.repositorioVehiculos.buscarPorId(householdId, entrada.vehiculoId);
 
   if (!vehiculo) {
     throw new ErrorDominio('No existe el vehículo indicado.');
@@ -33,7 +33,12 @@ export async function registrarEventoVehiculo(
     ? vehiculo.corregirKilometraje(evento.kilometros)
     : undefined;
 
-  await dependencias.unidadTrabajoVehiculos.registrarEventoYActualizarKilometraje({
+  // Contrato de atomicidad (tarea 8): NUNCA se hacen dos escrituras independientes
+  // (p. ej. `repositorioVehiculos.guardar` + `unidadTrabajoVehiculos.guardar` por
+  // separado). Dos llamadas separadas dejarían una ventana insegura donde el evento
+  // queda guardado sin actualizar el kilometraje, o viceversa, si la segunda llamada
+  // falla. Por eso ambas escrituras se delegan a una única unidad de trabajo.
+  await dependencias.unidadTrabajoVehiculos.registrarEventoYActualizarKilometraje(householdId, {
     evento,
     vehiculoActualizado,
   });

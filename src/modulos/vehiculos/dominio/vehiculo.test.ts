@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { crearIdentificador } from '../../../compartido/dominio/identificador';
 import { ErrorDominio } from './errores-dominio';
-import { crearVehiculo } from './vehiculo';
+import { crearVehiculo, reconstruirVehiculo } from './vehiculo';
 
 const datosValidos = () => ({
   id: crearIdentificador('vehiculo-1'),
@@ -110,6 +110,55 @@ describe('Vehiculo', () => {
     expect(vehiculoInactivo.matricula).toBe(vehiculo.matricula);
     expect(vehiculoInactivo.fechaAltaAplicacion.toISOString()).toBe(
       vehiculo.fechaAltaAplicacion.toISOString(),
+    );
+  });
+
+  it('reconstruye un vehículo inactivo directamente desde datos de persistencia', () => {
+    const vehiculo = reconstruirVehiculo({
+      ...datosValidos(),
+      estado: 'inactivo',
+      fechaDesactivacion: new Date('2026-03-15T08:30:00.000Z'),
+    });
+
+    expect(vehiculo.estado).toBe('inactivo');
+    expect(vehiculo.fechaDesactivacion?.toISOString()).toBe('2026-03-15T08:30:00.000Z');
+    expect(vehiculo.matricula).toBe('1234 ABC');
+  });
+
+  it('reconstruye un vehículo activo sin fecha de desactivación desde datos de persistencia', () => {
+    const vehiculo = reconstruirVehiculo({
+      ...datosValidos(),
+      estado: 'activo',
+    });
+
+    expect(vehiculo.estado).toBe('activo');
+    expect(vehiculo.fechaDesactivacion).toBeUndefined();
+  });
+
+  it('rechaza reconstruir un vehículo activo con fecha de desactivación (par estado/fecha inconsistente)', () => {
+    expect(() =>
+      reconstruirVehiculo({
+        ...datosValidos(),
+        estado: 'activo',
+        fechaDesactivacion: new Date('2026-03-15T08:30:00.000Z'),
+      }),
+    ).toThrow(
+      new ErrorDominio(
+        'Estado y fecha de desactivación inconsistentes: un vehículo activo no puede tener fecha de desactivación.',
+      ),
+    );
+  });
+
+  it('rechaza reconstruir un vehículo inactivo sin fecha de desactivación (par estado/fecha inconsistente)', () => {
+    expect(() =>
+      reconstruirVehiculo({
+        ...datosValidos(),
+        estado: 'inactivo',
+      }),
+    ).toThrow(
+      new ErrorDominio(
+        'Estado y fecha de desactivación inconsistentes: un vehículo inactivo debe tener fecha de desactivación.',
+      ),
     );
   });
 });

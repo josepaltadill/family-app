@@ -6,6 +6,14 @@ export type ActorAplicacion = Readonly<{
   rol: RolUsuario;
 }>;
 
+// El hogar entra a la aplicación por aquí, igual que el actor: es contexto de sesión
+// ambiental. Los puertos de persistencia reciben `householdId` explícito por llamada;
+// el dominio permanece agnóstico al hogar.
+export type ContextoAplicacion = Readonly<{
+  actor: ActorAplicacion;
+  householdId: Identificador;
+}>;
+
 export interface ProveedorIdentidad {
-  obtenerActorActual(): Promise<ActorAplicacion>;
+  obtenerContexto(): Promise<ContextoAplicacion>;
 }

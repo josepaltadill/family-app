@@ -176,6 +176,7 @@ El sistema MUST reconocer los roles iniciales `admin` y `editor` como conceptos 
 - La corrección manual del kilometraje actual MUST poder subir o bajar el valor actual.
 - Un mantenimiento con próximo vencimiento por kilometraje y fecha MUST vencer por la condición que ocurra primero.
 - Las tablas de persistencia para Supabase MUST usar el prefijo `mv_` cuando exista implementación de base de datos.
+- Los datos MUST estar aislados por hogar (multi-tenant): vehículos y eventos pertenecen a un hogar y no MUST ser visibles ni modificables desde otro hogar. La matrícula MUST ser única por hogar.
 - El modelo SHOULD dejar espacio para adjuntos futuros sin exigir adjuntos en el MVP.
 
 ## Requisitos no funcionales
@@ -242,7 +243,7 @@ El sistema MUST permitir validar los comportamientos críticos del MVP mediante 
 - Evento con un solo próximo vencimiento: MUST evaluarse únicamente contra la condición informada.
 - Evento sin próximo vencimiento: MUST quedar registrado sin estado de recurrencia vencida.
 - Coste no informado o coste cero: MAY permitirse si el producto decide registrar eventos sin coste; si se exige coste, el sistema MUST rechazar valores inválidos de forma explícita.
-- Matrícula duplicada: SHOULD evitarse para vehículos activos, salvo decisión explícita posterior para casos excepcionales.
+- Matrícula duplicada: MUST rechazarse dentro del mismo hogar (incluyendo vehículos inactivos); la misma matrícula MAY existir en hogares distintos.
 
 ## Compatibilidad futura
 

@@ -15,7 +15,7 @@ export type DatosCrearVehiculo = Readonly<{
   fechaAltaAplicacion: Date;
 }>;
 
-type DatosVehiculo = DatosCrearVehiculo &
+export type DatosVehiculo = DatosCrearVehiculo &
   Readonly<{
     estado: EstadoVehiculo;
     fechaDesactivacion?: Date;
@@ -41,8 +41,18 @@ export class Vehiculo {
     });
   }
 
+  /**
+   * Reconstruye un vehículo ya existente (por ejemplo desde una fila de persistencia)
+   * conservando su estado y fecha de desactivación reales. A diferencia de `crear`,
+   * no fuerza el estado inicial `activo`. Solo usado por adaptadores de persistencia.
+   */
+  static reconstruir(datos: DatosVehiculo): Vehiculo {
+    return new Vehiculo(datos);
+  }
+
   private constructor(datos: DatosVehiculo) {
     validarKilometraje(datos.kilometrosActuales);
+    validarConsistenciaEstadoDesactivacion(datos.estado, datos.fechaDesactivacion);
 
     this.id = datos.id;
     this.marca = datos.marca;
@@ -107,9 +117,37 @@ export function crearVehiculo(datos: DatosCrearVehiculo): Vehiculo {
   return Vehiculo.crear(datos);
 }
 
+export function reconstruirVehiculo(datos: DatosVehiculo): Vehiculo {
+  return Vehiculo.reconstruir(datos);
+}
+
 function validarKilometraje(kilometrosActuales: number): void {
   if (kilometrosActuales < 0) {
     throw new ErrorDominio('El kilometraje actual no puede ser negativo.');
+  }
+}
+
+/**
+ * Reconstruir() acepta `DatosVehiculo` arbitrarios de una fuente externa (fila
+ * de base de datos); esta validación garantiza que `estado` y `fechaDesactivacion`
+ * sean un par coherente en TODOS los puntos de entrada (constructor privado
+ * compartido), no solo en `crear`/`desactivar`, que ya construyen el par correcto
+ * internamente.
+ */
+function validarConsistenciaEstadoDesactivacion(
+  estado: EstadoVehiculo,
+  fechaDesactivacion: Date | undefined,
+): void {
+  if (estado === 'activo' && fechaDesactivacion) {
+    throw new ErrorDominio(
+      'Estado y fecha de desactivación inconsistentes: un vehículo activo no puede tener fecha de desactivación.',
+    );
+  }
+
+  if (estado === 'inactivo' && !fechaDesactivacion) {
+    throw new ErrorDominio(
+      'Estado y fecha de desactivación inconsistentes: un vehículo inactivo debe tener fecha de desactivación.',
+    );
   }
 }
 

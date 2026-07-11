@@ -18,14 +18,15 @@ export async function desactivarVehiculo(
   dependencias: DependenciasDesactivarVehiculo,
   entrada: EntradaDesactivarVehiculo,
 ): Promise<void> {
-  await dependencias.proveedorIdentidad.obtenerActorActual();
-  const vehiculo = await dependencias.repositorioVehiculos.buscarPorId(entrada.vehiculoId);
+  const { householdId } = await dependencias.proveedorIdentidad.obtenerContexto();
+  const vehiculo = await dependencias.repositorioVehiculos.buscarPorId(householdId, entrada.vehiculoId);
 
   if (!vehiculo) {
     throw new ErrorDominio('No existe el vehículo indicado.');
   }
 
   await dependencias.repositorioVehiculos.guardar(
+    householdId,
     vehiculo.desactivar(dependencias.proveedorFecha.ahora()),
   );
 }

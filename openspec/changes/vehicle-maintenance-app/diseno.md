@@ -121,7 +121,8 @@ Entidad `Vehiculo`:
 Reglas:
 
 - Un vehículo se desactiva, no se borra físicamente.
-- La matrícula debería ser única entre vehículos activos. La política exacta para históricos queda como decisión abierta.
+- La matrícula es única por hogar (`unique (household_id, matricula)` en `mv_vehiculos`), incluyendo vehículos inactivos. La misma matrícula puede existir en hogares distintos. Esta política ya está fijada por la migración `20260710000000_supabase_persistence_short.sql` y sustituye la antigua duda de unicidad global vs. solo activos.
+- El identificador de hogar (`household_id`) es una preocupación de tenencia/acceso, no un invariante de la entidad `Vehiculo`. El dominio permanece agnóstico al hogar; el hogar entra por la capa de aplicación (ver §6.1 y §11).
 - El kilometraje actual puede subir automáticamente al registrar eventos con más kilómetros.
 - El kilometraje actual puede corregirse manualmente hacia arriba o hacia abajo.
 
@@ -192,9 +193,10 @@ En el primer PR sin autenticación real, se documentan los roles pero no se apli
 Responsabilidades:
 
 1. Validar entrada básica con Zod en la frontera de interfaz.
-2. Construir `Vehiculo` válido en dominio.
-3. Verificar matrícula duplicada según política MVP.
-4. Persistir mediante `RepositorioVehiculos`.
+2. Resolver el contexto de aplicación (actor + `householdId`) mediante `ProveedorIdentidad`.
+3. Construir `Vehiculo` válido en dominio.
+4. Verificar matrícula duplicada dentro del hogar actual (`existeMatricula(householdId, matricula)`).
+5. Persistir mediante `RepositorioVehiculos` con el `householdId` del contexto.
 
 ### 5.2 Listar vehículos
 
@@ -250,37 +252,56 @@ Para el MVP conviene calcular vencimiento al consultar. Persistir estados deriva
 
 ### 6.1 Puertos principales
 
+Todos los puertos de persistencia son scoped por hogar: reciben `householdId` de forma explícita en cada llamada. No se usa un repositorio con hogar "fijado" en construcción, porque un servidor Next.js de larga vida atiende peticiones concurrentes de hogares distintos y un estado de hogar mutable en la instancia sería un foco de fuga entre hogares. RLS es la guarda final; la aplicación sigue siendo responsable de suministrar el `household_id` correcto en escrituras y de filtrarlo en lecturas.
+
 ```ts
 interface RepositorioVehiculos {
-  guardar(vehiculo: Vehiculo): Promise<void>;
-  buscarPorId(id: string): Promise<Vehiculo | null>;
-  listar(): Promise<Vehiculo[]>;
-  existeMatriculaActiva(matricula: string): Promise<boolean>;
+  guardar(householdId: Identificador, vehiculo: Vehiculo): Promise<void>;
+  buscarPorId(householdId: Identificador, id: Identificador): Promise<Vehiculo | null>;
+  listar(householdId: Identificador): Promise<Vehiculo[]>;
+  // Unicidad por hogar, refleja unique (household_id, matricula) e incluye inactivos.
+  existeMatricula(householdId: Identificador, matricula: string): Promise<boolean>;
 }
 
 interface RepositorioEventosVehiculo {
-  guardar(evento: EventoVehiculo): Promise<void>;
-  listarPorVehiculo(vehiculoId: string): Promise<EventoVehiculo[]>;
-  listarConVencimiento(): Promise<EventoVehiculo[]>;
+  guardar(householdId: Identificador, evento: EventoVehiculo): Promise<void>;
+  listarPorVehiculo(householdId: Identificador, vehiculoId: Identificador): Promise<EventoVehiculo[]>;
+  listarConVencimiento(householdId: Identificador): Promise<EventoVehiculo[]>;
+}
+
+interface UnidadTrabajoVehiculos {
+  registrarEventoYActualizarKilometraje(
+    householdId: Identificador,
+    datos: Readonly<{ evento: EventoVehiculo; vehiculoActualizado?: Vehiculo }>,
+  ): Promise<void>;
 }
 
 interface ProveedorFecha {
   ahora(): Date;
 }
 
+// El hogar entra a la aplicación por aquí, igual que el actor: es contexto de sesión ambiental.
+type ContextoAplicacion = Readonly<{
+  actor: ActorAplicacion; // rol admin/editor evaluado dentro del hogar (mv_household_members.rol)
+  householdId: Identificador;
+}>;
+
 interface ProveedorIdentidad {
-  obtenerActorActual(): Promise<ActorAplicacion>;
+  obtenerContexto(): Promise<ContextoAplicacion>;
 }
 ```
 
-`ProveedorIdentidad` puede devolver un actor de sistema o familiar por defecto en el primer PR. Cuando llegue Supabase Auth, solo se cambia el adaptador.
+`ProveedorIdentidad` es la costura por la que entra el hogar actual junto al actor. En el primer PR devuelve un contexto temporal fijo (actor `admin` + `householdId` fijo de desarrollo) sin auth real. Cuando llegue Supabase Auth, solo se cambia el adaptador: resolverá `auth.uid()`, leerá sus membresías (`mv_household_members`) y seleccionará el hogar activo (membresía única → automática; múltiples → selección explícita en UI futura). El primer `admin` se crea por bootstrap server-only, nunca por policy autenticada.
+
+Nota de reapertura de PR1: los puertos y el proveedor anteriores se implementaron en PR1 con firmas sin hogar (`existeMatricula(matricula)`, `obtenerActorActual()` → `{id, rol}`). Deben reabrirse al inicio de PR2 para adoptar las firmas scoped por hogar de arriba (ver `tasks.md`, tareas de enmienda de PR1).
 
 ### 6.2 Adaptador Supabase
 
 Responsabilidades:
 
-- Convertir filas `mv_*` a entidades de dominio.
-- Encapsular nombres de columnas y detalles SQL.
+- Convertir filas `mv_*` a entidades de dominio y viceversa, contra el esquema real de `supabase/migrations/20260710000000_supabase_persistence_short.sql` (cuatro tablas: `mv_households`, `mv_household_members`, `mv_vehiculos`, `mv_eventos_vehiculo`).
+- Inyectar `household_id` en toda escritura y filtrarlo en toda lectura, a partir del `householdId` recibido por el puerto.
+- Encapsular nombres de columnas y detalles SQL (p. ej. la FK compuesta `(household_id, vehiculo_id)` de eventos → vehículos).
 - No filtrar reglas de negocio fuera del dominio salvo restricciones de integridad necesarias.
 
 ### 6.3 Interfaz Next.js
@@ -296,58 +317,26 @@ No se recomienda introducir una capa API REST interna si la app solo consume sus
 
 ## 7. Modelo de persistencia Supabase
 
-Todas las tablas deben usar prefijo `mv_`.
+El esquema ya existe y es la fuente de verdad: `supabase/migrations/20260710000000_supabase_persistence_short.sql` (ver también `supabase/migrations/README.md`). PR2 NO crea una migración nueva para vehículos/eventos: adapta el adaptador Supabase a este esquema existente. El modelo es multi-tenant por hogar; todas las tablas usan prefijo `mv_`.
 
-### 7.1 Tabla `mv_vehiculos`
+### 7.1 Cuatro tablas del esquema real
 
-Columnas sugeridas:
+- `mv_households (id, nombre, created_at)`: hogar/tenant.
+- `mv_household_members (household_id, user_id, rol, created_at)`: membresía con rol `admin | editor` por hogar; PK `(household_id, user_id)`; FK a `auth.users`. Triggers `mv_preservar_admin_hogar` impiden dejar un hogar sin `admin`.
+- `mv_vehiculos`: incluye `household_id not null` (FK a `mv_households` con `on delete cascade`). Columnas de negocio: `marca`, `modelo`, `combustible`, `matricula`, `anio`, `kilometros_actuales`, `estado ('activo'|'inactivo')`, `fecha_compra timestamptz`, `fecha_alta_aplicacion timestamptz`, `fecha_desactivacion timestamptz null`. Restricciones clave:
+  - `unique (household_id, matricula)` → matrícula única por hogar, incluyendo inactivos.
+  - `unique (household_id, id)` → soporte de la FK compuesta desde eventos.
+  - Check de coherencia estado/`fecha_desactivacion` (activo ⇒ null; inactivo ⇒ not null).
+  - Checks `not empty` en marca/modelo/combustible/matrícula, `anio > 0`, `kilometros_actuales >= 0`.
+  - No hay columnas `creado_en`/`actualizado_en`: el adaptador NO debe mapearlas.
+- `mv_eventos_vehiculo`: incluye `household_id not null` y FK compuesta `(household_id, vehiculo_id)` → `mv_vehiculos(household_id, id)` con `on delete cascade` (impide cruces entre hogares). Columnas de negocio: `tipo ('mantenimiento'|'averia')`, `descripcion`, `kilometros`, `fecha timestamptz`, `proveedor`, `moneda`, `notas`, `coste numeric(12,2)`, `proximo_vencimiento_km`, `proximo_vencimiento_fecha timestamptz`, `fecha_creacion timestamptz default now()`. La columna de auditoría se llama `fecha_creacion` (no `creado_en`).
 
-- `id uuid primary key default gen_random_uuid()`
-- `marca text not null`
-- `modelo text not null`
-- `anio integer not null`
-- `combustible text not null`
-- `matricula text not null`
-- `kilometros_actuales integer not null check (kilometros_actuales >= 0)`
-- `estado text not null check (estado in ('activo', 'inactivo'))`
-- `fecha_compra date not null`
-- `fecha_alta_aplicacion timestamptz not null default now()`
-- `fecha_desactivacion timestamptz null`
-- `creado_en timestamptz not null default now()`
-- `actualizado_en timestamptz not null default now()`
+### 7.2 RLS y roles (ya activos en la migración)
 
-Índices/restricciones:
-
-- Índice por `estado`.
-- Índice por `matricula`.
-- Idealmente unicidad parcial para matrícula activa:
-  - `unique (matricula) where estado = 'activo'` si la estrategia SQL del entorno lo permite.
-
-### 7.2 Tabla `mv_eventos_vehiculo`
-
-Columnas sugeridas:
-
-- `id uuid primary key default gen_random_uuid()`
-- `vehiculo_id uuid not null references mv_vehiculos(id)`
-- `tipo text not null check (tipo in ('mantenimiento', 'averia'))`
-- `descripcion text not null`
-- `kilometros integer not null check (kilometros >= 0)`
-- `fecha date not null`
-- `proveedor text null`
-- `coste numeric(10,2) null check (coste is null or coste >= 0)`
-- `moneda text null`
-- `notas text null`
-- `proximo_vencimiento_km integer null check (proximo_vencimiento_km is null or proximo_vencimiento_km >= 0)`
-- `proximo_vencimiento_fecha date null`
-- `creado_en timestamptz not null default now()`
-- `actualizado_en timestamptz not null default now()`
-
-Índices:
-
-- `vehiculo_id`
-- `(vehiculo_id, fecha desc)`
-- `proximo_vencimiento_km` cuando no sea nulo
-- `proximo_vencimiento_fecha` cuando no sea nulo
+- RLS habilitado en las cuatro tablas; `anon` revocado; grants a `authenticated` solo para habilitar el enforcement de RLS, no acceso directo de navegador.
+- Funciones `security definer` `mv_es_miembro(household_id)` y `mv_tiene_rol(household_id, roles[])` (stable, `search_path` vacío).
+- Lectura: miembros del hogar. Escritura de vehículos/eventos: `admin` o `editor`. Borrado y administración de hogar/membresías: solo `admin`.
+- Implicación para el adaptador de servidor: al operar bajo un usuario `authenticated`, RLS acota a los hogares del usuario, pero un usuario puede pertenecer a varios; por eso la aplicación DEBE filtrar/inyectar el `household_id` seleccionado. Ver la pregunta abierta sobre credencial del adaptador MVP en §15.
 
 ### 7.3 Tablas futuras, no MVP
 
@@ -427,8 +416,8 @@ Consideraciones:
 
 El primer PR puede funcionar sin login real, pero la arquitectura debe dejar una costura clara:
 
-- Los casos de uso pueden recibir `ActorAplicacion`.
-- `ProveedorIdentidad` devuelve un actor temporal en MVP.
+- Los casos de uso resuelven un `ContextoAplicacion` (actor + `householdId`) vía `ProveedorIdentidad`.
+- `ProveedorIdentidad` devuelve un contexto temporal en MVP (actor + hogar fijos).
 - La autorización futura se añade como servicio/caso de uso de aplicación, no dentro de componentes React.
 - Supabase Auth será un adaptador posible, no una dependencia del dominio.
 
@@ -437,14 +426,19 @@ Modelo conceptual:
 ```ts
 type ActorAplicacion = {
   id: string;
-  rol: 'admin' | 'editor';
+  rol: 'admin' | 'editor'; // rol dentro del hogar actual (mv_household_members.rol)
+};
+
+type ContextoAplicacion = {
+  actor: ActorAplicacion;
+  householdId: string;
 };
 ```
 
 En MVP:
 
-- Actor fijo: `admin` o `editor` temporal según convenga para desarrollo.
-- Permisos documentados, no aplicados.
+- Contexto fijo: actor `admin` temporal + `householdId` de desarrollo conocido.
+- Permisos documentados, no aplicados en dominio (RLS los aplica en base de datos).
 
 En fase futura:
 
@@ -482,29 +476,33 @@ Fuera del primer PR:
 
 - Stack: Next.js + TypeScript + Supabase + Tailwind + Zod + Vitest.
 - Arquitectura: Clean/Hexagonal ligera, no ceremonial.
-- Persistencia: tablas Supabase con prefijo obligatorio `mv_`.
+- Persistencia: esquema multi-tenant por hogar ya migrado (`mv_households`, `mv_household_members`, `mv_vehiculos`, `mv_eventos_vehiculo`), prefijo obligatorio `mv_`.
+- Tenencia: el hogar entra por `ProveedorIdentidad` como contexto de sesión (actor + `householdId`); los puertos de persistencia reciben `householdId` explícito por llamada. El dominio permanece agnóstico al hogar.
+- Matrícula: única por hogar (`unique (household_id, matricula)`), incluyendo inactivos.
 - Coste de evento: opcional.
 - Corrección de kilometraje: puede subir o bajar.
 - Mantenimiento recurrente: vence por kilometraje o fecha, lo que ocurra primero.
-- Autenticación: desacoplada; primer PR puede usar actor temporal.
+- Autenticación: desacoplada; primer PR puede usar contexto temporal (actor + hogar fijos).
 - Adjuntos/OCR/IA/chat: roadmap, sin implementación MVP.
 
 ## 14. Riesgos de diseño
 
 - **Transaccionalidad evento + kilometraje**: registrar evento y actualizar vehículo debe ser atómico o recuperable. Si se implementa con dos llamadas separadas sin cuidado, puede quedar inconsistencia.
 - **Autenticación diferida**: empezar sin auth acelera el MVP, pero hay que mantener `ProveedorIdentidad` y `ActorAplicacion` desde el principio para no reescribir luego.
-- **RLS en Supabase compartido**: cuando haya auth, las políticas deben diseñarse con cuidado para no exponer datos entre apps o usuarios.
-- **Matrícula duplicada**: la regla exacta para vehículos históricos necesita una decisión final antes de cerrar migraciones definitivas.
+- **RLS en Supabase compartido**: ya está activa por hogar en la migración. Resuelto (§15.6): el adaptador de servidor se autentica como usuario real sembrado por bootstrap, no con `service_role`; RLS sigue siendo la frontera de seguridad real.
+- **Matrícula duplicada**: resuelto. Unicidad por hogar (`unique (household_id, matricula)`) incluyendo inactivos; la misma matrícula puede repetirse en hogares distintos.
 - **Auditoría de kilometraje**: permitir correcciones hacia abajo es necesario, pero en el futuro convendrá auditar quién corrigió, cuándo y por qué.
 - **Presupuesto de revisión**: inicializar stack + dominio + UI + Supabase puede superar 400 líneas; conviene dividir tareas en cortes revisables.
 
 ## 15. Decisiones abiertas
 
-1. ¿La matrícula debe ser única globalmente o solo entre vehículos activos?
+1. RESUELTA: la matrícula es única por hogar (`unique (household_id, matricula)`), incluyendo inactivos. Superada por la migración `20260710000000_supabase_persistence_short.sql`.
 2. ¿El proveedor/taller es obligatorio o puede quedar vacío?
-3. ¿El primer PR incluye migraciones Supabase reales o empieza con dominio/UI y deja Supabase para el siguiente corte?
-4. ¿Se activará RLS desde el primer despliegue aunque no haya auth real?
+3. RESUELTA: la migración de persistencia ya existe (cuatro tablas `mv_*` con RLS). PR2 adapta el adaptador contra ese esquema; no crea migración nueva de vehículos/eventos.
+4. RESUELTA: RLS ya está activa por hogar en las cuatro tablas desde la migración.
 5. ¿Se quiere registrar una razón textual para correcciones manuales de kilometraje desde el MVP?
+6. RESUELTA: el adaptador de servidor MVP se autentica como un usuario `auth.users` real, sembrado por bootstrap server-only junto a su hogar y membresía (`mv_household_members`), e inicia sesión server-side como ese usuario. RLS sigue siendo la última línea de defensa contra fugas entre hogares; `service_role` queda descartado para esta app. El bootstrap server-only (creación de usuario/hogar/membresía semilla) es un requisito de PR2, no un paso manual fuera del cambio.
+7. RESUELTA: el `householdId` fijo de desarrollo del `ProveedorIdentidad` temporal corresponde exactamente al `mv_households.id` creado por ese mismo bootstrap server-only (decisión 6); no es un valor arbitrario, sino el id real devuelto al sembrar el hogar de desarrollo.
 
 ## 16. Guía educativa para implementación
 

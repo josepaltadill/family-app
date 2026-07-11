@@ -142,6 +142,63 @@ El código de salida es `0` solo cuando preflight, guardas, migración, fixtures
 
 `npm test` cubre contratos deterministas del shell, incluido el rechazo de destinos externos/remotos, la propiedad del contenedor, la captura de secretos, las sesiones concurrentes y la aceptación condicionada del binding wildcard local; no sustituye la ejecución RLS runtime con Supabase CLI + Docker.
 
+## Decisión de credencial del adaptador de servidor (PR2, tarea 9)
+
+Resuelta (ver también diseño §15.6/§15.7): el adaptador de servidor de esta app se
+autentica como un usuario `auth.users` REAL, sembrado por un bootstrap server-only,
+e inicia sesión server-side (`signInWithPassword`) como ese usuario. `service_role`
+queda descartado para el código en ejecución de esta app: nunca se guarda ni se lee
+una clave `service_role` en el cliente Supabase de la aplicación, en `.env.example`
+ni en componentes React. RLS sigue siendo la frontera de seguridad real; el
+adaptador de servidor solo puede leer/escribir lo que la membresía del usuario
+sembrado permita.
+
+### Por qué el bootstrap no puede correr con el cliente normal (anon key + RLS)
+
+La migración `20260710000000_supabase_persistence_short.sql` no otorga privilegio
+`insert` sobre `mv_households` a `authenticated` (solo `select`/`update`/`delete`), y
+la política `mv_household_members_insert_admin` exige YA ser `admin` del hogar para
+poder insertar la primera membresía. Es decir, RLS impide deliberadamente que
+cualquier usuario autenticado normal se auto-nombre `admin` de un hogar nuevo. Por
+eso el primer `admin` de un hogar solo puede sembrarse mediante un acceso
+administrativo aislado, ejecutado una única vez por un operador/proceso de
+bootstrap fuera de la ruta de la aplicación en ejecución — nunca con la
+`service_role` key de la app, ni desde código cliente, ni mediante una policy
+autenticada normal.
+
+### Procedimiento de siembra (idempotente)
+
+`src/modulos/vehiculos/adaptadores/supabase/bootstrap-servidor.ts` expone
+`sembrarHogarDeDesarrollo(operaciones, entrada)`, que busca-o-crea, en este orden:
+usuario de desarrollo (`SUPABASE_BOOTSTRAP_EMAIL`/`SUPABASE_BOOTSTRAP_PASSWORD`),
+hogar (`SUPABASE_BOOTSTRAP_HOUSEHOLD_NOMBRE`) y membresía `admin` del usuario en ese
+hogar. Reejecutarlo no duplica ninguno de los tres (ver
+`bootstrap-servidor.test.ts`). El `householdId` de desarrollo que usa
+`ProveedorIdentidadSupabaseServidor` (`src/modulos/vehiculos/adaptadores/supabase/proveedor-identidad-supabase-servidor.ts`)
+es exactamente el `mv_households.id` real devuelto por este bootstrap, nunca un
+valor arbitrario. El puerto `OperacionesBootstrap` representa el acceso
+administrativo aislado descrito arriba; su implementación real contra
+Postgres/Supabase (fuera del cliente anon-key normal) queda pendiente de entorno
+Supabase real disponible — ver blocker documentado en `apply-progress.md`.
+
+### Variables de entorno de servidor (nunca `NEXT_PUBLIC_*`)
+
+Deliberadamente ninguna variable usada por el adaptador de datos de app usa el
+prefijo `NEXT_PUBLIC_*`: esta app no tiene ningún camino de acceso browser-side a
+`mv_vehiculos`/`mv_eventos_vehiculo` en este PR, así que no hay necesidad de exponer
+nada al cliente. Los nombres exactos (sin valores reales) son:
+`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_BOOTSTRAP_EMAIL`,
+`SUPABASE_BOOTSTRAP_PASSWORD` y `SUPABASE_BOOTSTRAP_HOUSEHOLD_NOMBRE`. Ver
+`src/compartido/infraestructura/entorno.ts` para la validación, que además rechaza
+explícitamente cualquier nombre `NEXT_PUBLIC_*`.
+
+> Nota de herramienta: no se pudo crear un `.env.example` en la raíz del repo en
+> este corte porque el entorno de ejecución del agente bloquea a nivel de
+> sandbox la escritura de cualquier archivo `.env*`, incluso sin secretos reales
+> (guarda de seguridad genérica anti-secretos, no específica de este proyecto).
+> Queda documentado aquí como blocker de herramienta; un operador humano puede
+> crear `.env.example` con estos cinco nombres sin valores.
+
 ## Estado de conexión actual
 
 En esta sesión no hay MCP Supabase conectado ni script de puente Supabase detectado en el repositorio. Hasta que exista ese puente, las migraciones se preparan como archivos SQL versionados y su aplicación real requiere autorización explícita.
