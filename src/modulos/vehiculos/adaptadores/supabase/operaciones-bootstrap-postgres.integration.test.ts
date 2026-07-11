@@ -1,0 +1,49 @@
+import { randomUUID } from 'node:crypto';
+import { Client } from 'pg';
+import { afterAll, describe, expect, it } from 'vitest';
+import { ejecutarBootstrapPostgresDesdeEntorno } from './operaciones-bootstrap-postgres';
+
+const databaseUrl = process.env.SUPABASE_BOOTSTRAP_DATABASE_URL;
+const ejecutar = databaseUrl ? describe : describe.skip;
+let cliente: Client | undefined;
+let householdId: string | undefined;
+let userId: string | undefined;
+
+async function obtenerCliente(): Promise<Client> {
+  if (!cliente) {
+    cliente = new Client({ connectionString: databaseUrl });
+    await cliente.connect();
+  }
+  return cliente;
+}
+
+ejecutar('OperacionesBootstrapPostgres (Postgres local)', () => {
+  afterAll(async () => {
+    const conexion = await obtenerCliente();
+    if (householdId) await conexion.query('delete from public.mv_households where id = $1', [householdId]);
+    if (userId) await conexion.query('delete from auth.users where id = $1', [userId]);
+    await conexion.end();
+  });
+
+  it('siembra idempotentemente usuario, hogar y membresía admin con ids reales', async () => {
+    const sufijo = randomUUID();
+    const entorno = {
+      SUPABASE_BOOTSTRAP_DATABASE_URL: databaseUrl,
+      SUPABASE_BOOTSTRAP_EMAIL: `bootstrap-${sufijo}@ejemplo.local`,
+      SUPABASE_BOOTSTRAP_PASSWORD: 'password-local-de-prueba',
+      SUPABASE_BOOTSTRAP_HOUSEHOLD_NOMBRE: `Hogar bootstrap ${sufijo}`,
+    };
+
+    const primera = await ejecutarBootstrapPostgresDesdeEntorno(entorno);
+    householdId = primera.householdId.valor;
+    userId = primera.userId.valor;
+    const segunda = await ejecutarBootstrapPostgresDesdeEntorno(entorno);
+    const membresias = await (await obtenerCliente()).query<{ rol: string }>(
+      'select rol from public.mv_household_members where household_id = $1 and user_id = $2',
+      [householdId, userId],
+    );
+
+    expect(segunda).toEqual(primera);
+    expect(membresias.rows).toEqual([{ rol: 'admin' }]);
+  });
+});

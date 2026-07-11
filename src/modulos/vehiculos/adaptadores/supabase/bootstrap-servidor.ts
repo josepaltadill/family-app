@@ -8,29 +8,13 @@
 // un hogar nuevo. El primer admin de un hogar solo puede sembrarse fuera de esa
 // frontera (acceso administrativo directo a la base, ejecutado una única vez por
 // un operador/proceso de bootstrap, nunca con la `service_role` key de la app en
-// ejecución ni desde código cliente). `OperacionesBootstrap` es el puerto que
-// representa ese acceso administrativo aislado; su implementación real contra
-// Postgres/Supabase queda fuera de este PR por falta de entorno Supabase
-// disponible en esta sesión (ver apply-progress.md, sección de blockers).
+// ejecución ni desde código cliente). `OperacionesBootstrap` representa ese acceso
+// aislado y `OperacionesBootstrapPostgres` lo implementa usando una conexión Postgres
+// administrativa que solo debe existir en un proceso server-only de bootstrap.
 //
-// La función de este módulo solo orquesta el "buscar o crear" de forma
-// idempotente: nunca duplica usuario, hogar ni membresía en reejecuciones.
-//
-// LIMITACIÓN CONOCIDA (single-instance/dev-only): el "buscar o crear" de esta
-// función NO tiene respaldo de unicidad a nivel de base de datos (`mv_households.nombre`
-// no tiene constraint `unique`; añadirla requeriría una nueva migración, fuera de
-// alcance de este PR). Dos invocaciones concurrentes de este bootstrap (por ejemplo,
-// dos instancias del servidor arrancando a la vez) podrían intercalarse entre el
-// `buscarHogarPorNombre` y el `crearHogar` de cada una y crear dos hogares duplicados
-// de forma silenciosa. Para no dejar ese caso pasar desapercibido, tras crear un hogar
-// nuevo esta función vuelve a consultar cuántos hogares existen con ese nombre; si
-// encuentra más de uno, aborta con `ErrorRaceBootstrapHogar` en vez de continuar como
-// si nada. Esto convierte una duplicación silenciosa en un fallo ruidoso y detectable,
-// pero NO la previene ni la repara: sigue siendo responsabilidad de un futuro guardián
-// de concurrencia (constraint `unique` + migración, o bloqueo/advisory lock) evitar que
-// ocurra en primer lugar. Este bootstrap debe tratarse como de un único proceso/instancia
-// hasta que exista esa migración; no es seguro para siembra concurrente multi-instancia
-// en producción.
+// La migración `20260711000000_mv_households_nombre_unique.sql` protege la creación
+// concurrente de hogares. La reconsulta posterior se conserva como defensa adicional
+// para detectar datos históricos corruptos o un adaptador administrativo incorrecto.
 import { crearIdentificador, type Identificador } from '../../../../compartido/dominio/identificador';
 
 export class ErrorRaceBootstrapHogar extends Error {
@@ -38,10 +22,8 @@ export class ErrorRaceBootstrapHogar extends Error {
     super(
       `Condición de carrera detectada al sembrar el hogar de desarrollo "${nombre}": ` +
         `se encontraron ${cantidadEncontrada} hogares con ese nombre justo después de crearlo. ` +
-        'Es probable que dos bootstraps concurrentes hayan creado hogares duplicados ' +
-        'porque `mv_households.nombre` no tiene una restricción `unique` a nivel de base de datos ' +
-        '(requeriría una nueva migración, fuera de alcance de este PR). Abortando para evitar continuar ' +
-        'con un estado duplicado silencioso.',
+        'La restricción `mv_households_nombre_key` debería impedir este estado; ' +
+        'se aborta para evitar continuar con datos históricos corruptos o un adaptador administrativo incorrecto.',
     );
     this.name = 'ErrorRaceBootstrapHogar';
   }
