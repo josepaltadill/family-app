@@ -157,3 +157,21 @@ El corte PR3 corregido supera la verificación funcional, de seguridad focalizad
 - Suite: `npm test` → 34 archivos, 198/198 tests.
 - Tipos: `npx tsc --noEmit` → código 2 con exactamente los 7 errores conocidos documentados; cero errores nuevos.
 - No se modificó código de producción ni se requirió build para esta remediación test-only.
+
+## Addendum final — PR4 (bootstrap admin persistence) y cierre del cambio
+
+**Resultado: ✅ CAMBIO COMPLETO, LISTO PARA ARCHIVO**
+
+Este addendum cierra el bloqueador de archivo señalado en el veredicto original de este reporte ("persiste una tarea de implementación sin marcar"): la tarea 9 de `tasks.md` (`OperacionesBootstrapPostgres` contra Postgres administrativo real + constraint `unique` en `mv_households.nombre`) se completó e implementó en PR4 (`feat/vehiculos-bootstrap-admin`, PR #4, merge commit `56cab35`, 2026-07-11), cerrando el issue #3.
+
+PR4 pasó por una revisión adversarial de 4 lentes (`review-risk`, `review-resilience`, `review-readability`, `review-reliability`) antes del merge. Hallazgos y remediación:
+
+- **BLOCKER (reliability)**: ningún test automatizado ejercitaba el path real de conflicto del `unique (nombre)` — el único test de integración nunca llegaba al `on conflict` porque el chequeo previo de búsqueda siempre encontraba la fila. Corregido: nuevo test de integración que llama `crearHogar` dos veces directamente contra Postgres local, forzando el conflicto real. Verificado con ciclo RED→GREEN completo (se rompió el `on conflict` a propósito, se confirmó el fallo esperado, se restauró).
+- **CRITICAL (resilience)**: `ejecutarBootstrapPostgresDesdeEntorno` usaba un `finally { await operaciones.cerrar() }` que, si la siembra fallaba y el cierre de conexión también fallaba, descartaba el error original de siembra. Corregido con `catch` explícito que loguea el fallo de cierre y siempre relanza el error de siembra original.
+- **CRITICAL (readability)**: `design.md` y `specs/vehicle-maintenance-app/spec.md` habían sido agregados como copias byte a byte de `diseno.md`/`spec.md` ya existentes, sin relación con el alcance de PR4. Eliminados.
+
+Verificación final: `npm test` → 208/208 (incluye el nuevo test de integración contra Postgres local, antes contado como "1 skipped"). `npx tsc --noEmit` → mismos 7 errores preexistentes, cero nuevos. `npm run build` → compila y genera las rutas de `/vehiculos` correctamente.
+
+Los warnings no bloqueantes de las 4 reviews (guard `server-only` por convención, preflight de migración manual, timeout/retry de conexión, entrypoint sin wiring de producción, normalización de `nombre`, upgrade de membresía no-admin, tests acoplados a SQL literal, ausencia de CI) se archivaron como issues de seguimiento en GitHub: #5, #6, #7, #8, #9, #10, #11, #12, #13. Ninguno bloquea este cierre.
+
+**Veredicto final**: las 74/74 tareas de `tasks.md` están completas. No quedan bloqueadores de archivo. El cambio queda cerrado.
