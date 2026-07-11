@@ -1440,3 +1440,147 @@ obligatoria (nunca saltar la tarea), no una excepción para omitirla.
 - GREEN/TRIANGULATE: `npm test -- src/modulos/vehiculos/interfaz/composicion/dependencias-servidor.test.ts src/modulos/vehiculos/interfaz/componentes/historial-eventos.test.tsx` → 2 archivos, 13/13 tests.
 - Suite: `npm test` → 34 archivos, 198/198 tests.
 - Tipos: `npx tsc --noEmit` → código 2 con exactamente los 7 errores conocidos; cero errores nuevos.
+
+## Bloqueo del corte — bootstrap administrativo real y unicidad de hogares (2026-07-11)
+
+### Estado estructurado consumido
+
+- `gentle-ai sdd-status vehicle-maintenance-app --cwd /home/josep/proyectos/manteniment-vehicles --json --instructions` devolvió `artifactStore: openspec`, `applyState: blocked` y `nextRecommended: spec`.
+- Motivos autoritativos: el dispatcher no reconoce `spec.md` ni `diseno.md` con los nombres actuales y declara `specs/**/spec.md` y `design.md` como ausentes/parciales, aunque los artefactos requeridos se leyeron directamente en `openspec/changes/vehicle-maintenance-app/`.
+- `actionContext`: `repo-local`; workspace y raíz permitida: `/home/josep/proyectos/manteniment-vehicles`.
+- TDD estricto: activo; runner configurado: `npm test`.
+- Entrega: corte asignado de la cadena `stacked-to-main`; no se inició otro trabajo de PR3.
+
+### Comprobaciones realizadas sin modificar código ni base de datos
+
+- Se leyó el puerto actual `OperacionesBootstrap` y sus pruebas: solo existe la orquestación con dobles en `bootstrap-servidor.ts`; no hay adaptador administrativo real todavía.
+- Se inspeccionó la migración `20260710000000_supabase_persistence_short.sql`: `public.mv_households.nombre` solo tiene check de texto no vacío, no tiene `unique` ni mecanismo de bloqueo equivalente.
+- `supabase status` falló porque no existe el contenedor local esperado `supabase_db_manteniment-vehicles`.
+- Docker solo expone `listify_db` (`postgres:15-alpine`), perteneciente al proyecto externo `listify`; no es una instancia Supabase de este proyecto y no se tocó.
+- No había variables `SUPABASE`, `DATABASE`, `POSTGRES` ni `VEHICULOS` disponibles en el entorno de ejecución.
+
+### Resultado
+
+No se escribió código, migración ni prueba: el `applyState: blocked` autoritativo obliga a detenerse antes de editar, y no hay entorno Supabase/Postgres del proyecto ni credenciales administrativas server-only con los que ejecutar el ciclo RED→GREEN y validar la migración real.
+
+La tarea permanece sin marcar:
+
+- [ ] GREEN (pendiente, fuera de este PR): implementar `OperacionesBootstrap` contra Postgres/Supabase Admin API real (no dobles) + añadir guardia de unicidad/bloqueo a nivel de base de datos (constraint `unique` en `mv_households.nombre` o mecanismo equivalente) antes de usar este bootstrap en un entorno multi-instancia o de producción. Requiere entorno Supabase real/local disponible y probablemente una nueva migración.
+
+### Requisitos exactos para desbloquear
+
+1. Corregir o autorizar explícitamente el estado OpenSpec para que el dispatcher reconozca los artefactos `spec.md` y `diseno.md` (o proporcionar los nombres/rutas canónicas que espera).
+2. Proporcionar una instancia Supabase local del proyecto en ejecución, o una conexión Postgres administrativa aislada y autorizada que incluya `auth.users` y permita aplicar/probar migraciones `mv_*`; el contenedor externo `listify_db` no sirve.
+3. Proporcionar las credenciales server-only necesarias para la vía administrativa elegida, sin usar `service_role` en cliente ni exponerlas mediante `NEXT_PUBLIC_*`.
+
+### Workload / PR boundary
+
+- Boundary solicitado: únicamente el bootstrap administrativo real y la guarda de concurrencia de `mv_households.nombre`.
+- Sin commit, push, merge ni PR.
+
+## Bloqueo de apply — estado OpenSpec autoritativo sin resolver (2026-07-11)
+
+### Estado estructurado consumido
+
+- Se ejecutó `gentle-ai sdd-status vehicle-maintenance-app --cwd /home/josep/proyectos/manteniment-vehicles --json --instructions`.
+- Resultado autoritativo: `artifactStore: openspec`, `applyState: blocked`, `nextRecommended: spec`.
+- Motivos: el dispatcher no reconoce los artefactos existentes `spec.md` y `diseno.md`; declara ausentes `specs/**/spec.md` y `design.md`.
+- `actionContext`: `repo-local`; raíz de trabajo y única raíz permitida: `/home/josep/proyectos/manteniment-vehicles`.
+- TDD estricto confirmado: activo; runner `npm test`.
+- La instancia Supabase local indicada por el orquestador está disponible, pero no elimina este bloqueo de estado autoritativo.
+
+### Resultado
+
+No se escribieron producción, pruebas ni migraciones, ni se ejecutaron comandos que muten la base. La regla de apply exige detenerse antes de editar cuando `applyState: blocked` es autoritativo.
+
+La tarea pendiente permanece sin marcar:
+
+- [ ] GREEN (pendiente, fuera de este PR): implementar `OperacionesBootstrap` contra Postgres/Supabase Admin API real (no dobles) + añadir guardia de unicidad/bloqueo a nivel de base de datos (constraint `unique` en `mv_households.nombre` o mecanismo equivalente) antes de usar este bootstrap en un entorno multi-instancia o de producción. Requiere entorno Supabase real/local disponible y probablemente una nueva migración; no se puede completar en esta sesión (ver blockers en `apply-progress.md`).
+
+### TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| Bootstrap administrativo real + unicidad de hogares | N/A | N/A | ➖ No ejecutada: bloqueo autoritativo previo a toda edición | ➖ No iniciada | ➖ No iniciada | ➖ No iniciada | ➖ No iniciada |
+
+### Siguiente acción requerida
+
+Normalizar o autorizar las rutas canónicas que espera el dispatcher (`specs/**/spec.md` y `design.md`) y volver a ejecutar el estado hasta obtener `applyState: ready`. Solo entonces corresponde ejecutar RED → GREEN contra la instancia local, aplicar una migración mínima y verificar la restricción de unicidad.
+
+## Bootstrap administrativo real y unicidad de hogares — cierre del bloqueo (2026-07-11)
+
+### Estado estructurado consumido
+
+- Cambio activo: `vehicle-maintenance-app`; `applyState: ready`, `nextRecommended: apply`.
+- `actionContext`: `repo-local`; todas las ediciones se realizaron dentro de `/home/josep/proyectos/manteniment-vehicles`.
+- Artifact store: OpenSpec autoritativo; TDD estricto activo con `npm test`.
+- Estrategia de entrega: `auto-chain`, `stacked-to-main`; boundary: únicamente el bloqueo de bootstrap administrativo y unicidad de hogares.
+
+### Tarea completada y checkbox persistido
+
+- [x] GREEN: implementar `OperacionesBootstrapPostgres` contra Postgres administrativo real, server-only, y añadir `mv_households_nombre_key` (`unique (nombre)`) con la migración `20260711000000_mv_households_nombre_unique.sql`.
+
+Se releyó `tasks.md`: no quedan líneas `- [ ]` y la tarea 9 pendiente está marcada `- [x]`.
+
+### Implementación
+
+- `OperacionesBootstrapPostgres` implementa el puerto con SQL parametrizado y conexión PostgreSQL administrativa aislada: crea o reutiliza el usuario de `auth.users`, hogar y membresía `admin` sin usar claves `service_role` ni variables `NEXT_PUBLIC_*`.
+- La creación del hogar usa `ON CONFLICT (nombre)` y la nueva constraint de base evita duplicados concurrentes.
+- La migración local quedó aplicada y registrada en el historial local de Supabase.
+- La documentación de migraciones define la frontera exclusiva server-only y la configuración privada sin valores reales.
+
+### TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| Adaptador PostgreSQL administrativo | `operaciones-bootstrap-postgres.test.ts` | Adapter/unit | Bootstrap con dobles existente | El import falló por módulo inexistente | 3 pruebas verdes: usuario, hogar y membresía usan SQL parametrizado/idempotente | Integración local: dos ejecuciones devuelven los mismos IDs reales y una única membresía `admin` | SQL encapsulado en adaptador server-only; comentarios de bootstrap alineados con la constraint |
+| Unicidad de hogares | `migracion-hogares-unique.test.ts` | Migration contract + PostgreSQL local | Migración base existente | Falló por ausencia de `20260711000000_mv_households_nombre_unique.sql` | Contract test verde con constraint nominal | PostgreSQL local confirmó `UNIQUE (nombre)` y rechazó un segundo nombre idéntico dentro de transacción revertida | Constraint con nombre estable `mv_households_nombre_key` y documentación actualizada |
+
+### Verificación
+
+- Focused bootstrap/security tests: 5 archivos, 15 pruebas verdes.
+- Integración real: `SUPABASE_BOOTSTRAP_DATABASE_URL=<privada> npm test -- operaciones-bootstrap-postgres.integration.test.ts` → 1 prueba verde; crea/reutiliza usuario, hogar y membresía y limpia sus fixtures.
+- Migración: aplicada con `psql` sobre Supabase local y registrada con `supabase migration repair --status applied 20260711000000 --local`; `supabase migration list --local` muestra ambas migraciones aplicadas.
+- Verificación PostgreSQL: `mv_households_nombre_key: UNIQUE (nombre)`; el intento duplicado produjo `unique_violation` de esa constraint dentro de una transacción revertida.
+- `npm test` → 37 archivos, 203 pruebas verdes.
+- `npx tsc --noEmit` → código 2 por exactamente 7 errores preexistentes: 5 en `validate-supabase-rls.test.ts`, 1 en `bootstrap-servidor.test.ts`, 1 en `cliente-supabase-servidor.test.ts`; no hay errores nuevos del corte.
+- `npm run build` → verde (Next.js 16.2.10).
+
+### Archivos cambiados
+
+- `package.json`, `package-lock.json` (cliente PostgreSQL y tipos).
+- `src/modulos/vehiculos/adaptadores/supabase/operaciones-bootstrap-postgres.ts`.
+- `src/modulos/vehiculos/adaptadores/supabase/operaciones-bootstrap-postgres.test.ts`.
+- `src/modulos/vehiculos/adaptadores/supabase/operaciones-bootstrap-postgres.integration.test.ts`.
+- `src/modulos/vehiculos/adaptadores/supabase/migracion-hogares-unique.test.ts`.
+- `src/modulos/vehiculos/adaptadores/supabase/bootstrap-servidor.ts`.
+- `supabase/migrations/20260711000000_mv_households_nombre_unique.sql`.
+- `supabase/migrations/README.md`.
+- `openspec/changes/vehicle-maintenance-app/tasks.md`.
+- `openspec/changes/vehicle-maintenance-app/apply-progress.md`.
+
+### Desviaciones y riesgos
+
+- Sin desviaciones de diseño. Se eligió Postgres administrativo directo, en vez de Admin API, para no introducir ni persistir una clave `service_role` en la aplicación.
+- La URL administrativa es exclusivamente de proceso server-only y no se escribió en artefactos ni salida persistida.
+- Permanecen 2 vulnerabilidades moderadas transitivas conocidas de Next/PostCSS, ya documentadas; no pertenecen a este corte.
+
+### Workload / PR boundary
+
+- Corte completado: bloqueo bootstrap administrativo + constraint de hogares únicamente; sin cambios en UI de PR3.
+- No se hizo commit, push, merge, PR ni archive.
+
+### Refactor final de ciclo de vida
+
+- RED: se añadió la prueba de cierre administrativo; falló porque `cerrar` no existía.
+- GREEN: `OperacionesBootstrapPostgres.cerrar()` delega el cierre de la conexión y la factory real adapta `Client.end()`; evita dejar conexiones administrativas abiertas tras un bootstrap de proceso corto.
+- Verificación final actualizada: `npm test` → 36 archivos verdes + 1 integración omitida sin URL privada, 203 pruebas verdes y 1 omitida; la integración se ejecutó explícitamente antes con la URL local privada y pasó.
+- `npx tsc --noEmit` mantiene exactamente los 7 errores preexistentes ya enumerados; `npm run build` sigue verde.
+
+### Remediación R4-BOOTSTRAP-ENTRYPOINT-001
+
+- RED: dos pruebas del entrypoint fallaron con `TypeError: ejecutarBootstrapPostgresDesdeEntorno is not a function`.
+- GREEN/TRIANGULATE: `ejecutarBootstrapPostgresDesdeEntorno` lee únicamente las cuatro variables privadas de bootstrap, crea el adaptador real, invoca `sembrarHogarDeDesarrollo` y ejecuta `cerrar()` en `finally` tanto en éxito como en error.
+- La integración Postgres ahora consume el entrypoint real en vez de construir directamente el adaptador.
+- La guía eliminó la sección duplicada y añadió preflight/recovery explícito para nombres de hogar históricos duplicados antes de crear `mv_households_nombre_key`.
+- Verificación: foco 7 pruebas verdes + 1 integración omitida sin URL; suite completa 205 verdes + 1 omitida; build verde; TypeScript conserva exactamente los 7 errores preexistentes conocidos.
