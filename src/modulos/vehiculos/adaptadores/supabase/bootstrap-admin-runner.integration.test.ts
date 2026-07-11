@@ -7,12 +7,24 @@ const databaseUrl = process.env.SUPABASE_BOOTSTRAP_DATABASE_URL;
 const ejecutar = databaseUrl ? describe : describe.skip;
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
+// Presupuesto por defecto del cliente administrativo: 3 intentos de conexión
+// x 5s de connectionTimeoutMillis cada uno + ~600ms de backoff ≈ 15.6s en el
+// peor caso antes de que crearOperacionesBootstrapPostgres se rinda. El
+// timeout del propio proceso hijo debe dejar margen real por encima de eso,
+// no quedar justo debajo (spawnSync mata con SIGTERM al vencer, y eso se
+// vería como `status: null`, no como un fallo del bootstrap en sí).
+const TIMEOUT_PROCESO_HIJO_MS = 30_000;
+
 function correrRunner(env: Readonly<Record<string, string | undefined>>) {
   return spawnSync('./node_modules/.bin/tsx', ['scripts/bootstrap-admin.ts'], {
     cwd: process.cwd(),
     encoding: 'utf8',
-    timeout: 15_000,
-    env: { ...process.env, ...env, NODE_OPTIONS: '--conditions=react-server' },
+    timeout: TIMEOUT_PROCESO_HIJO_MS,
+    env: {
+      ...process.env,
+      ...env,
+      NODE_OPTIONS: '--import ./scripts/hooks/register-server-only-loader.mjs',
+    },
   });
 }
 
@@ -59,5 +71,34 @@ ejecutar('runner de bootstrap administrativo (scripts/bootstrap-admin.ts)', () =
 
     expect(resultado.status).not.toBe(0);
     expect(resultado.stderr).toContain('Falta la variable privada obligatoria SUPABASE_BOOTSTRAP_EMAIL');
+  });
+
+  it('nunca imprime la contraseña ni la URL de conexión completas en salida o error', () => {
+    const contrasenaSecreta = `secreto-${randomUUID()}`;
+    const urlConexion = `postgresql://postgres:${contrasenaSecreta}@127.0.0.1:54322/postgres`;
+
+    const resultadoExitoso = correrRunner({
+      SUPABASE_BOOTSTRAP_DATABASE_URL: urlConexion,
+      SUPABASE_BOOTSTRAP_EMAIL: `bootstrap-runner-${randomUUID()}@ejemplo.local`,
+      SUPABASE_BOOTSTRAP_PASSWORD: contrasenaSecreta,
+      SUPABASE_BOOTSTRAP_HOUSEHOLD_NOMBRE: `Hogar runner ${randomUUID()}`,
+    });
+
+    expect(resultadoExitoso.stdout).not.toContain(contrasenaSecreta);
+    expect(resultadoExitoso.stderr).not.toContain(contrasenaSecreta);
+
+    householdId = resultadoExitoso.stdout.match(new RegExp(`householdId: (${UUID.source})`, 'i'))?.[1];
+    userId = resultadoExitoso.stdout.match(new RegExp(`userId: (${UUID.source})`, 'i'))?.[1];
+
+    const resultadoFallido = correrRunner({
+      SUPABASE_BOOTSTRAP_DATABASE_URL: `postgresql://postgres:${contrasenaSecreta}@127.0.0.1:54322/base_inexistente`,
+      SUPABASE_BOOTSTRAP_EMAIL: `bootstrap-runner-${randomUUID()}@ejemplo.local`,
+      SUPABASE_BOOTSTRAP_PASSWORD: contrasenaSecreta,
+      SUPABASE_BOOTSTRAP_HOUSEHOLD_NOMBRE: 'Hogar runner fallido',
+    });
+
+    expect(resultadoFallido.status).not.toBe(0);
+    expect(resultadoFallido.stdout).not.toContain(contrasenaSecreta);
+    expect(resultadoFallido.stderr).not.toContain(contrasenaSecreta);
   });
 });

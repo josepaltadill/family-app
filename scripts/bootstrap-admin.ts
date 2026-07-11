@@ -17,8 +17,16 @@ async function main(): Promise<void> {
   console.log(`  userId: ${resultado.userId.valor}`);
 }
 
-main().catch((error: unknown) => {
-  console.error('Bootstrap administrativo falló.');
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+// `process.exit()` explícito en vez de dejar que el event loop drene solo:
+// el cierre de la conexión administrativa tiene un límite de tiempo, pero si
+// algún handle igual queda vivo (ej. un socket que no terminó de cerrarse),
+// el proceso no debe quedar colgado sin ninguna señal para el operador.
+main()
+  .then(() => {
+    process.exit(0);
+  })
+  .catch((error: unknown) => {
+    console.error('Bootstrap administrativo falló.');
+    console.error(error instanceof Error ? error.message : error);
+    process.exit(1);
+  });
