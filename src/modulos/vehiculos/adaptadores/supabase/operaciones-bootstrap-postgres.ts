@@ -117,17 +117,74 @@ export class OperacionesBootstrapPostgres implements OperacionesBootstrap {
   }
 }
 
+const CONNECTION_TIMEOUT_MS_DEFECTO = 5_000;
+const INTENTOS_CONEXION_DEFECTO = 3;
+const BACKOFF_BASE_MS_DEFECTO = 200;
+
+export type OpcionesConexionBootstrap = Readonly<{
+  connectionTimeoutMillis?: number;
+  intentosConexion?: number;
+  backoffBaseMs?: number;
+}>;
+
+/**
+ * Reintenta `intentar` hasta `intentos` veces con backoff lineal creciente
+ * (`backoffBaseMs * intento` entre cada reintento), pensado para errores
+ * transitorios de conexión (red caída momentáneamente, reset). No distingue
+ * el tipo de error: solo debe usarse para operaciones idempotentes como abrir
+ * una conexión nueva, nunca para lógica de negocio no idempotente.
+ */
+export async function conectarConReintentos<T>(
+  intentar: () => Promise<T>,
+  intentos: number,
+  backoffBaseMs: number,
+): Promise<T> {
+  let ultimoError: unknown;
+
+  for (let intento = 1; intento <= intentos; intento += 1) {
+    try {
+      return await intentar();
+    } catch (error) {
+      ultimoError = error;
+      if (intento < intentos) {
+        await esperar(backoffBaseMs * intento);
+      }
+    }
+  }
+
+  throw ultimoError;
+}
+
+function esperar(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /** Crea el adaptador real para scripts server-only; no acepta variables públicas. */
 export async function crearOperacionesBootstrapPostgres(
   databaseUrl: string,
+  opciones: OpcionesConexionBootstrap = {},
 ): Promise<OperacionesBootstrapPostgres> {
   if (!databaseUrl || databaseUrl.trim().length === 0) {
     throw new Error('Se requiere una URL PostgreSQL administrativa para el bootstrap.');
   }
 
+  const {
+    connectionTimeoutMillis = CONNECTION_TIMEOUT_MS_DEFECTO,
+    intentosConexion = INTENTOS_CONEXION_DEFECTO,
+    backoffBaseMs = BACKOFF_BASE_MS_DEFECTO,
+  } = opciones;
+
   const { Client } = await import('pg');
-  const cliente = new Client({ connectionString: databaseUrl });
-  await cliente.connect();
+  const cliente = await conectarConReintentos(
+    async () => {
+      const nuevoCliente = new Client({ connectionString: databaseUrl, connectionTimeoutMillis });
+      await nuevoCliente.connect();
+      return nuevoCliente;
+    },
+    intentosConexion,
+    backoffBaseMs,
+  );
+
   return new OperacionesBootstrapPostgres({
     query: cliente.query.bind(cliente),
     cerrar: () => cliente.end(),
