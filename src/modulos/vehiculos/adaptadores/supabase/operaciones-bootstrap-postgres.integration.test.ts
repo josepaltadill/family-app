@@ -50,6 +50,44 @@ ejecutar('OperacionesBootstrapPostgres (Postgres local)', () => {
     expect(membresias.rows).toEqual([{ rol: 'admin' }]);
   });
 
+  it('crearUsuario resuelve un email duplicado en vez de crear una segunda fila', async () => {
+    const conexion = await obtenerCliente();
+    const operaciones = new OperacionesBootstrapPostgres({ query: conexion.query.bind(conexion) });
+    const email = `bootstrap-usuario-duplicado-${randomUUID()}@ejemplo.local`;
+
+    const primero = await operaciones.crearUsuario(email, 'password-local-de-prueba');
+    const segundo = await operaciones.crearUsuario(email, 'otra-password-distinta');
+    const filas = await conexion.query('select id from auth.users where email = $1', [email]);
+
+    expect(segundo.id).toBe(primero.id);
+    expect(filas.rows).toHaveLength(1);
+
+    await conexion.query('delete from auth.users where id = $1', [primero.id]);
+  });
+
+  it('crearMembresiaAdmin es idempotente: invocarla dos veces no falla ni duplica la fila', async () => {
+    const conexion = await obtenerCliente();
+    const operaciones = new OperacionesBootstrapPostgres({ query: conexion.query.bind(conexion) });
+    const sufijo = randomUUID();
+    const usuario = await operaciones.crearUsuario(`bootstrap-membresia-${sufijo}@ejemplo.local`, 'password-local-de-prueba');
+    const hogar = await operaciones.crearHogar(`Hogar membresía ${sufijo}`);
+
+    await operaciones.crearMembresiaAdmin(hogar.id, usuario.id);
+    await expect(operaciones.crearMembresiaAdmin(hogar.id, usuario.id)).resolves.toBeUndefined();
+
+    const filas = await conexion.query(
+      'select rol from public.mv_household_members where household_id = $1 and user_id = $2',
+      [hogar.id, usuario.id],
+    );
+    expect(filas.rows).toEqual([{ rol: 'admin' }]);
+
+    // Borrar el hogar primero (cascada a la membresía): el trigger de último
+    // admin solo bloquea un delete directo de la membresía mientras el hogar
+    // sigue existiendo, no la cascada de borrar el hogar completo.
+    await conexion.query('delete from public.mv_households where id = $1', [hogar.id]);
+    await conexion.query('delete from auth.users where id = $1', [usuario.id]);
+  });
+
   it('crearHogar resuelve un nombre duplicado mediante la restricción única en vez de crear una segunda fila', async () => {
     const conexion = await obtenerCliente();
     const operaciones = new OperacionesBootstrapPostgres({ query: conexion.query.bind(conexion) });
