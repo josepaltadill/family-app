@@ -1,0 +1,70 @@
+{
+  "schema": "gentle-ai.review-transaction/v1",
+  "lineage_id": "supabase-rls-runtime-validation-cut2-native-v2",
+  "mode": "ordinary_4r",
+  "generation": 1,
+  "state": "approved",
+  "snapshot": {
+    "kind": "current-changes",
+    "base_tree": "d80d1bd1f555cf09f4dbea7a44652ec75858aa8c",
+    "candidate_tree": "bb2d8c5135830ee725c98fb5b90654771fc32a9d",
+    "paths_digest": "sha256:283d4781255b47ae060961cbd65502c6c9624ca3f00a9a8f0ea54f800ac214fd",
+    "intended_untracked": [
+      "openspec/changes/supabase-rls-runtime-validation/verify-report.md",
+      "supabase/validation/concurrency/session-a.sql",
+      "supabase/validation/concurrency/session-b.sql",
+      "supabase/validation/concurrency/setup.sql"
+    ],
+    "intended_untracked_proof": "sha256:acf6eb3e20291e7ea930bad57268fdb0267e34031779273858186f0113c3ae91",
+    "paths": [
+      "openspec/changes/supabase-rls-runtime-validation/apply-progress.md",
+      "openspec/changes/supabase-rls-runtime-validation/tasks.md",
+      "openspec/changes/supabase-rls-runtime-validation/verify-report.md",
+      "scripts/validate-supabase-rls.sh",
+      "src/compartido/pruebas/validate-supabase-rls.test.ts",
+      "supabase/migrations/README.md",
+      "supabase/validation/concurrency/session-a.sql",
+      "supabase/validation/concurrency/session-b.sql",
+      "supabase/validation/concurrency/setup.sql"
+    ],
+    "identity": "sha256:f55b3e9605a54deb4f91a24be41a5ec7820211981e16392c50571fa82643ba6c"
+  },
+  "genesis_paths": [
+    "openspec/changes/supabase-rls-runtime-validation/apply-progress.md",
+    "openspec/changes/supabase-rls-runtime-validation/tasks.md",
+    "openspec/changes/supabase-rls-runtime-validation/verify-report.md",
+    "scripts/validate-supabase-rls.sh",
+    "src/compartido/pruebas/validate-supabase-rls.test.ts",
+    "supabase/migrations/README.md",
+    "supabase/validation/concurrency/session-a.sql",
+    "supabase/validation/concurrency/session-b.sql",
+    "supabase/validation/concurrency/setup.sql"
+  ],
+  "base_tree": "d80d1bd1f555cf09f4dbea7a44652ec75858aa8c",
+  "paths_digest": "sha256:283d4781255b47ae060961cbd65502c6c9624ca3f00a9a8f0ea54f800ac214fd",
+  "initial_review_tree": "bb2d8c5135830ee725c98fb5b90654771fc32a9d",
+  "final_candidate_tree": "bb2d8c5135830ee725c98fb5b90654771fc32a9d",
+  "fix_delta_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "policy_hash": "sha256:6575620493d6abfdad62e1e1ee64c709c22b970775141b38c4b2c1109987d4cf",
+  "ledger_hash": "sha256:8dcffe8cccb4e5c0cc5d59b004e79cdd9fa74fc3f6e94c8f7d439ed015d5aa3f",
+  "ledger_findings_hash": "sha256:dc7066caf7f1a69347dc5e5e9addd77eb7f279bd9943079ed125bebe4afc4eb8",
+  "evidence_hash": "sha256:86b4018099de0ba0fa3e4c5a4a58518d32e007cb6905baaa98cc1704b47e4392",
+  "judge_proofs": [],
+  "counters": {
+    "full_reviews": 1,
+    "refuter_batches": 0,
+    "fix_batches": 0,
+    "scoped_fix_validations": 0,
+    "final_verifications": 1,
+    "fix_rounds": 0,
+    "scoped_rejudgments": 0,
+    "judge_executions": 0
+  },
+  "findings": [],
+  "classifications": {},
+  "outcomes": {},
+  "fix_finding_ids": [],
+  "pending_refuter_ids": [],
+  "fix_caused_findings": [],
+  "follow_ups": []
+}

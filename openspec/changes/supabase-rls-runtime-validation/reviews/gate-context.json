@@ -1,0 +1,20 @@
+{
+  "schema": "gentle-ai.review-gate-request/v1",
+  "gate": "post-apply",
+  "target": {
+    "kind": "current-changes",
+    "intended_untracked": [
+      "openspec/changes/supabase-rls-runtime-validation/verify-report.md",
+      "supabase/validation/concurrency/setup.sql",
+      "supabase/validation/concurrency/session-a.sql",
+      "supabase/validation/concurrency/session-b.sql"
+    ]
+  },
+  "store_revision": "sha256:2b32e77b7a6934ccf82c2fef911119e8e615ca2f7ee0ca15b718828517f28dcf",
+  "genesis_revision": "sha256:d169176d4887338245bcbb406e2c86e0b483ee20d6ef3b755807bd29d366e653",
+  "chain_identity": "sha256:a987c20f7ab885e65c940b44f39a40592c938034d95da34cdeb89814b547bf50",
+  "bundle_digest": "sha256:f7879b56a1b1082a0d720ed9858cbf4698975e92dcb55aeb577e6e762520c858",
+  "policy_artifact": "openspec/changes/supabase-rls-runtime-validation/reviews/policy.md",
+  "ledger_artifact": "openspec/changes/supabase-rls-runtime-validation/reviews/ledger.json",
+  "evidence_artifact": "openspec/changes/supabase-rls-runtime-validation/verify-report.md"
+}

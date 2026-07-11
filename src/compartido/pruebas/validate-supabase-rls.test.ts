@@ -40,6 +40,68 @@ describe('validate-supabase-rls shell contracts', () => {
     expect(assertions).toContain("'post-negative.cross-household-event'");
   });
 
+  it('requires two bounded concurrent last-admin sessions before the harness can pass', async () => {
+    const harnessPath = fileURLToPath(new URL('../../../scripts/validate-supabase-rls.sh', import.meta.url));
+    const sessionAPath = fileURLToPath(new URL('../../../supabase/validation/concurrency/session-a.sql', import.meta.url));
+    const sessionBPath = fileURLToPath(new URL('../../../supabase/validation/concurrency/session-b.sql', import.meta.url));
+    const [harness, sessionA, sessionB] = await Promise.all([
+      readFile(harnessPath, 'utf8'),
+      readFile(sessionAPath, 'utf8'),
+      readFile(sessionBPath, 'utf8'),
+    ]);
+
+    expect(harness).toContain('run_concurrency');
+    expect(harness).toContain('timeout --kill-after=5s 20s docker exec -i');
+    expect(harness).toContain('timeout --kill-after=5s 20s docker exec "$container_id" psql');
+    expect(harness).toContain("concurrency='passed'");
+    expect(harness).toContain("status='PASS'");
+    expect(sessionA).toContain('concurrency.session-a');
+    expect(sessionB).toContain('concurrency.session-b');
+  });
+
+  it('exits zero only when sequential SQL, concurrency sessions, final admin count, and cleanup pass', async () => {
+    const tools = await mkdtemp(join(tmpdir(), 'mv-rls-concurrency-success-'));
+    const marker = join(tools, 'invocations');
+
+    try {
+      await fakeExecutable(tools, 'supabase', `echo "supabase $*" >> "${marker}"
+[[ "$1" == '--version' ]] && { echo fake; exit 0; }
+[[ "$1" == 'start' || "$1" == 'stop' ]] && [[ "\${2:-}" == '--help' ]] && { echo --workdir; exit 0; }
+if [[ "$1" == start ]]; then awk -F'"' '/^project_id/{print $2}' "$3/supabase/config.toml" > "${marker}.project"; exit 0; fi
+[[ "$1" == stop ]] && exit 0
+exit 1`);
+      await fakeExecutable(tools, 'docker', `echo "docker $*" >> "${marker}"
+[[ "$1" == '--version' ]] && { echo fake; exit 0; }
+[[ "$1" == info ]] && exit 0
+[[ "$1 $2" == 'context show' ]] && { echo default; exit 0; }
+[[ "$1 $2" == 'context inspect' ]] && { echo unix:///var/run/docker.sock; exit 0; }
+[[ "$1 $2" == 'ps -aq' ]] && { echo db-owned; exit 0; }
+[[ "$1" == inspect && "\${2:-}" != -f ]] && exit 0
+project_id="$(cat "${marker}.project")"
+if [[ "$1" == inspect ]]; then case "$3" in *project*) echo "$project_id";; *service*) echo db;; *Name*) echo "/supabase_db_$project_id";; *Created*) echo 2999-01-01T00:00:00Z;; *Networks*) echo "$project_id";; *Ports*) echo 127.0.0.1:54322;; esac; exit 0; fi
+if [[ "$1" == exec ]]; then
+  if [[ "$*" == *current_database* ]]; then echo postgres; exit 0; fi
+  if [[ "$*" == *inet_server_addr* ]]; then echo 127.0.0.1; exit 0; fi
+  if [[ "$*" == *'count(*)'* ]]; then echo 1; exit 0; fi
+  input="$(cat)"
+  if [[ "$input" == *concurrency.session-a* ]]; then echo 'NOTICE:  CASE|concurrency.session-a|delete-or-23514|delete|PASS'; fi
+  if [[ "$input" == *concurrency.session-b* ]]; then echo 'NOTICE:  CASE|concurrency.session-b|delete-or-23514|23514|PASS'; fi
+  exit 0
+fi
+exit 1`);
+
+      const result = runHarness({ env: { MV_FAKE_PROJECT_ID: 'mv-rls-validation-placeholder' }, path: `${tools}:/usr/bin:/bin` });
+      const invocations = await readFile(marker, 'utf8');
+
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain('PASS|sql|migration-fixtures-sequential-matrix');
+      expect(result.stdout).toContain('PASS|concurrency|two-sessions|one-admin-remains');
+      expect(result.stdout).toContain('PASS|gate|complete-runtime-validation');
+      expect(result.stdout).toContain('SUMMARY|status=PASS|passed=3|failed=0|blocked=0|concurrency=passed');
+      expect(invocations).toContain('supabase stop --workdir');
+    } finally { await rm(tools, { force: true, recursive: true }); }
+  });
+
   it('stops the sequential matrix before reporting success when any SQL file fails', async () => {
     const harnessPath = fileURLToPath(new URL('../../../scripts/validate-supabase-rls.sh', import.meta.url));
     const harness = await readFile(harnessPath, 'utf8');
@@ -227,9 +289,9 @@ exit 1`);
       const dockerExecInvocations = invocations
         .split('\n')
         .filter((invocation) => invocation.startsWith('docker exec'));
-      expect(dockerExecInvocations).toHaveLength(5);
+      expect(dockerExecInvocations).toHaveLength(8);
       expect(dockerExecInvocations.every((invocation) => invocation.includes('psql -U postgres -d postgres'))).toBe(true);
-      expect(dockerExecInvocations.filter((invocation) => invocation.includes('-i db-owned'))).toHaveLength(3);
+      expect(dockerExecInvocations.filter((invocation) => invocation.includes('-i db-owned'))).toHaveLength(6);
       expect(invocations).toContain('supabase stop --workdir');
     } finally { await rm(tools, { force: true, recursive: true }); }
   });

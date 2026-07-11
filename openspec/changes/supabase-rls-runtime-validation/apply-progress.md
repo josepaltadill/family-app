@@ -66,4 +66,60 @@ The first local/ephemeral continuation run exposed a **product migration defect*
 
 ### Remaining work
 
-- [ ] WU-7/WU-8 concurrency remain intentionally out of scope and pending.
+- [x] WU-7/WU-8 concurrency and final runtime gate completed in cut 2; their persisted checkboxes are marked in `tasks.md`.
+
+## Cut 2 — last-admin concurrency and final gate
+
+### Status
+
+**PASS.** The harness now exits `0` only after the sequential matrix, two real concurrent last-admin sessions, privileged final-admin verification, and safe cleanup all pass. This validates only the owned local/ephemeral runtime; it does not authorize a real Supabase application.
+
+### Implemented
+
+- Added `supabase/validation/concurrency/setup.sql` plus separate `session-a.sql` and `session-b.sql` files. Both sessions reach a database barrier, then delete different authenticated admins from household A.
+- Added bounded `timeout --kill-after=5s 20s docker exec ... psql` processes, independent stdout/stderr capture, exit-code checks, stable `CASE` evidence, and a final privileged assertion that exactly one admin remains.
+- Cleanup now refuses to stop the runtime while concurrent session processes are still live.
+- Replaced the cut-1 pending-concurrency exit with a PASS gate and documented the full local runtime requirement.
+- Updated deterministic shell contracts for the concurrency files, timeout invocation, and full-gate state.
+
+### Persisted task updates
+
+- WU-7: all five concurrency tasks marked `- [x]` in `tasks.md`.
+- WU-8: all six final-gate/documentation/triangulation tasks marked `- [x]` in `tasks.md`.
+
+### TDD Cycle Evidence
+
+| Task | Test file | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|
+| WU-7/WU-8 concurrency gate | `src/compartido/pruebas/validate-supabase-rls.test.ts` + local ephemeral Supabase | PASS — focused test failed because `session-a.sql`/`session-b.sql` did not exist | PASS — focused suite: 19 tests; shell syntax passed | PASS — two clean runtime executions passed: both sessions emitted PASS evidence, exactly one admin remained, cleanup succeeded, and exit was 0 | No refactor required; the separate SQL sessions retain clear process boundaries |
+
+### Validation evidence
+
+| Check | Result |
+|---|---|
+| Focused `npm test -- src/compartido/pruebas/validate-supabase-rls.test.ts` | PASS — 19 tests. |
+| `bash -n scripts/validate-supabase-rls.sh` | PASS. |
+| `./scripts/validate-supabase-rls.sh` (two clean runs) | PASS — Supabase CLI 2.109.1, Docker 29.3.1; sequential matrix, concurrent sessions, final one-admin assertion, and cleanup passed; exit 0. |
+| `npm test` | PASS — 7 files, 58 tests. |
+| `git diff --check` | PASS. |
+| Migration functional diff | PASS — no diff for `supabase/migrations/20260710000000_supabase_persistence_short.sql`. |
+
+### Workload / PR boundary
+
+- PR 2 only: concurrency files, harness final gate, deterministic test contract, runtime guide, and SDD evidence. Current code/documentation diff is 88 insertions and 28 deletions plus the new concurrency files, below the 400-line review budget.
+- No commit, push, PR, or review transaction was created.
+
+### Remaining work
+
+The following persisted closure criteria remain unchecked and belong to verification/closure, not this implementation cut:
+
+- [ ] `git diff` confirma que la migración funcional no fue modificada y no se añadieron adaptador TypeScript, UI, MCP, credenciales o seeds permanentes.
+- [ ] Cada work unit tiene evidencia de inicio, finalización, verificación y rollback.
+- [ ] La ejecución nunca muta antes del preflight y la guarda de destino.
+- [ ] PR 1 no se considera autorización de despliegue; PR 2 debe pasar concurrencia antes de código cero.
+- [ ] Cualquier defecto de esquema descubierto abre una decisión/cambio separado; no se corrige silenciosamente en este harness.
+
+### Structured status consumed
+
+- Authoritative native status: `changeName=supabase-rls-runtime-validation`, `artifactStore=openspec`, `dependencies.apply=ready`, `nextRecommended=apply`.
+- `actionContext.allowedEditRoots=/home/josep/proyectos/manteniment-vehicles`; all edits stayed inside it. No action-context warnings.

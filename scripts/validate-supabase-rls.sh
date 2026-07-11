@@ -17,14 +17,18 @@ passed=0
 failed=0
 blocked=0
 safe_cleanup=false
+concurrency='pending'
+sessions_finished=true
 
 report() { printf '%s\n' "$1"; }
 block() { blocked=$((blocked + 1)); status='BLOCKED'; report "BLOCKED|$1"; }
 fail() { failed=$((failed + 1)); status='FAIL'; report "FAIL|$1"; }
 pass() { passed=$((passed + 1)); report "PASS|$1"; }
 summary() {
-  report "SUMMARY|status=$status|passed=$passed|failed=$failed|blocked=$blocked|concurrency=pending"
-  report 'BLOCKED: concurrency pending'
+  report "SUMMARY|status=$status|passed=$passed|failed=$failed|blocked=$blocked|concurrency=$concurrency"
+  if [[ "$concurrency" != 'passed' ]]; then
+    report "BLOCKED: concurrency $concurrency"
+  fi
 }
 final_exit_code() {
   local validation_exit_code=$1
@@ -38,7 +42,10 @@ final_exit_code() {
 cleanup() {
   local exit_code=$?
   trap - EXIT INT TERM
-  if [[ "$safe_cleanup" == true && -n "$workspace" && -n "$container_id" ]] && owns_runtime; then
+  if [[ "$sessions_finished" != true ]]; then
+    block 'cleanup|concurrency-process-still-live|manual-inspection-required'
+    exit_code="$(final_exit_code "$exit_code" 'concurrency-process-still-live')"
+  elif [[ "$safe_cleanup" == true && -n "$workspace" && -n "$container_id" ]] && owns_runtime; then
     # This stop is scoped to the generated project and is never run after an ambiguous guard.
     if supabase stop --workdir "$workspace" >/dev/null 2>&1; then
       rm -rf -- "$workspace"
@@ -101,7 +108,9 @@ preflight() {
   require_command docker || return 1
   require_command mktemp || return 1
   require_command awk || return 1
+  require_command grep || return 1
   require_command sed || return 1
+  require_command timeout || return 1
   local supabase_version docker_version
   supabase_version="$(supabase --version)" || { block 'preflight|supabase-version'; return 1; }
   docker_version="$(docker --version)" || { block 'preflight|docker-version'; return 1; }
@@ -124,6 +133,7 @@ create_workspace() {
   cp "$MIGRATION" "$workspace/migration.sql"
   cp "$VALIDATION_DIR/fixtures.sql" "$workspace/fixtures.sql"
   cp "$VALIDATION_DIR/assertions.sql" "$workspace/assertions.sql"
+  cp -R "$VALIDATION_DIR/concurrency" "$workspace/concurrency"
   local start_log="$workspace/supabase-start.log"
   : > "$start_log"
   chmod 600 "$start_log"
@@ -206,15 +216,51 @@ apply_and_validate() {
   pass 'sql|migration-fixtures-sequential-matrix'
 }
 
+run_concurrency() {
+  phase='concurrency'
+  local log_a="$workspace/concurrency-session-a.log"
+  local log_b="$workspace/concurrency-session-b.log"
+  local code_a code_b admins
+
+  run_sql "$workspace/concurrency/setup.sql" || return 1
+  sessions_finished=false
+  timeout --kill-after=5s 20s docker exec -i "$container_id" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 \
+    < "$workspace/concurrency/session-a.sql" >"$log_a" 2>&1 &
+  local pid_a=$!
+  timeout --kill-after=5s 20s docker exec -i "$container_id" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 \
+    < "$workspace/concurrency/session-b.sql" >"$log_b" 2>&1 &
+  local pid_b=$!
+
+  if wait "$pid_a"; then code_a=0; else code_a=$?; fi
+  if wait "$pid_b"; then code_b=0; else code_b=$?; fi
+  sessions_finished=true
+  if (( code_a != 0 || code_b != 0 )); then
+    fail "concurrency|session-exit|a=$code_a|b=$code_b"
+    return 1
+  fi
+  if ! grep -q 'CASE|concurrency.session-a|delete-or-23514|.*|PASS' "$log_a" \
+    || ! grep -q 'CASE|concurrency.session-b|delete-or-23514|.*|PASS' "$log_b"; then
+    fail 'concurrency|missing-session-evidence'
+    return 1
+  fi
+  admins="$(timeout --kill-after=5s 20s docker exec "$container_id" psql -U postgres -d postgres -X -Atqc "select count(*) from public.mv_household_members where household_id = '10000000-0000-0000-0000-00000000000a' and rol = 'admin'")"
+  if [[ "$admins" != '1' ]]; then
+    fail "concurrency|final-admin-count|expected=1|observed=$admins"
+    return 1
+  fi
+  concurrency='passed'
+  pass 'concurrency|two-sessions|one-admin-remains'
+}
+
 main() {
   report 'COMMAND|./scripts/validate-supabase-rls.sh'
   preflight || return 1
   create_workspace || return 1
   guard_local_runtime || return 1
   apply_and_validate || { fail "sql|$phase"; return 1; }
-  status='BLOCKED'
-  # PR/cut 1 deliberately never authorizes deployment: WU-7/WU-8 add concurrency.
-  return 1
+  run_concurrency || return 1
+  status='PASS'
+  pass 'gate|complete-runtime-validation'
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

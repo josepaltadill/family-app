@@ -103,11 +103,11 @@ Todos los work units siguientes tienen límites de rollback independientes: elim
 
 **Inicio:** PR 1 pasa su matriz secuencial y conserva el bloqueo explícito.
 
-- [ ] Crear `supabase/validation/concurrency/session-a.sql` y `session-b.sql` (o equivalente claramente separado) para retirar administradores del mismo hogar en dos sesiones reales.
-- [ ] Añadir barrera determinista, `timeout` acotado, captura de stdout/stderr y códigos de ambos procesos en `scripts/validate-supabase-rls.sh`.
-- [ ] Esperar ambos procesos sin ocultar el primer fallo, rechazar deadlock/timeout y comprobar como `postgres` que el estado final conserva al menos un admin.
-- [ ] Verificar que como máximo una operación puede producir la pérdida de validez y que el resultado no se reporta como éxito parcial.
-- [ ] No iniciar cleanup hasta confirmar que ambas sesiones terminaron; ante proceso vivo o identidad ambigua, detenerse sin borrar.
+- [x] Crear `supabase/validation/concurrency/session-a.sql` y `session-b.sql` (o equivalente claramente separado) para retirar administradores del mismo hogar en dos sesiones reales.
+- [x] Añadir barrera determinista, `timeout` acotado, captura de stdout/stderr y códigos de ambos procesos en `scripts/validate-supabase-rls.sh`.
+- [x] Esperar ambos procesos sin ocultar el primer fallo, rechazar deadlock/timeout y comprobar como `postgres` que el estado final conserva al menos un admin.
+- [x] Verificar que como máximo una operación puede producir la pérdida de validez y que el resultado no se reporta como éxito parcial.
+- [x] No iniciar cleanup hasta confirmar que ambas sesiones terminaron; ante proceso vivo o identidad ambigua, detenerse sin borrar.
 
 **Verificación:** repetir la prueba varias veces desde runtime limpio y registrar determinismo, códigos y estado final. **Fin:** concurrencia pasa como requisito obligatorio o mantiene bloqueo. **Rollback:** eliminar los SQL de concurrencia y la integración sin afectar la matriz secuencial.
 
@@ -115,19 +115,19 @@ Todos los work units siguientes tienen límites de rollback independientes: elim
 
 **Inicio:** WU-7 pasa y todos los casos secuenciales siguen verdes.
 
-- [ ] Integrar concurrencia en `scripts/validate-supabase-rls.sh` y permitir código `0` únicamente cuando pasen preflight, guardas, aplicación, matriz completa, concurrencia, evidencia sin secretos y cleanup seguro.
-- [ ] Actualizar `supabase/migrations/README.md` para retirar el bloqueo solo bajo la evidencia completa, incluida concurrencia; mantener explícito que no autoriza por sí mismo una aplicación real.
-- [ ] Ejecutar desde repositorio limpio el comando exacto y conservar en `apply-progress` solo un resumen manual con versiones, totales, fallos y bloqueos, sin output volátil ni secretos.
-- [ ] Ejecutar `npm test` y una ejecución runtime completa; comparar esperado/obtenido, código de salida y ausencia de mutación fuera del workspace propio.
-- [ ] TRIANGULATE con revisión de archivos modificados, diff de la migración sin cambios funcionales y comprobación de que el cleanup no alcanza recursos externos.
-- [ ] REFACTOR solo después de evidencia verde: simplificar duplicación sin ampliar alcance y repetir todas las verificaciones.
+- [x] Integrar concurrencia en `scripts/validate-supabase-rls.sh` y permitir código `0` únicamente cuando pasen preflight, guardas, aplicación, matriz completa, concurrencia, evidencia sin secretos y cleanup seguro.
+- [x] Actualizar `supabase/migrations/README.md` para retirar el bloqueo solo bajo la evidencia completa, incluida concurrencia; mantener explícito que no autoriza por sí mismo una aplicación real.
+- [x] Ejecutar desde repositorio limpio el comando exacto y conservar en `apply-progress` solo un resumen manual con versiones, totales, fallos y bloqueos, sin output volátil ni secretos.
+- [x] Ejecutar `npm test` y una ejecución runtime completa; comparar esperado/obtenido, código de salida y ausencia de mutación fuera del workspace propio.
+- [x] TRIANGULATE con revisión de archivos modificados, diff de la migración sin cambios funcionales y comprobación de que el cleanup no alcanza recursos externos.
+- [x] REFACTOR solo después de evidencia verde: simplificar duplicación sin ampliar alcance y repetir todas las verificaciones.
 
 **Fin:** gate runtime completo reproducible; si cualquier requisito no pasa, el despliegue permanece bloqueado. **Rollback:** revertir únicamente la integración/documentación de PR 2 y conservar la evidencia del bloqueo.
 
 ## Criterios de cierre
 
-- [ ] `git diff` confirma que la migración funcional no fue modificada y no se añadieron adaptador TypeScript, UI, MCP, credenciales o seeds permanentes.
-- [ ] Cada work unit tiene evidencia de inicio, finalización, verificación y rollback.
-- [ ] La ejecución nunca muta antes del preflight y la guarda de destino.
-- [ ] PR 1 no se considera autorización de despliegue; PR 2 debe pasar concurrencia antes de código cero.
-- [ ] Cualquier defecto de esquema descubierto abre una decisión/cambio separado; no se corrige silenciosamente en este harness.
+- [x] `git diff` confirma que la migración funcional no fue modificada y no se añadieron adaptador TypeScript, UI, MCP, credenciales o seeds permanentes.
+- [x] Cada work unit tiene evidencia de inicio, finalización, verificación y rollback.
+- [x] La ejecución nunca muta antes del preflight y la guarda de destino.
+- [x] PR 1 no se considera autorización de despliegue; PR 2 debe pasar concurrencia antes de código cero.
+- [x] Cualquier defecto de esquema descubierto abre una decisión/cambio separado; no se corrige silenciosamente en este harness.

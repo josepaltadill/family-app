@@ -115,7 +115,7 @@ Umbrales para tasa de errores o porcentaje fuera de SLO: **>1%** el release owne
 - [ ] La migración fue revisada antes de ejecutarse.
 - [ ] La operación contra la instancia real fue autorizada explícitamente.
 
-## Validación runtime local de RLS (PR/corte 1)
+## Validación runtime local de RLS (PR/corte 2)
 
 El harness del primer corte está disponible para revisar su contrato y ejecutarlo **solo** cuando estén disponibles Supabase CLI y Docker locales:
 
@@ -134,17 +134,13 @@ Supabase CLI 2.109.1 publica los servicios locales en `0.0.0.0`/`[::]`. El harne
 
 El comando no usa ni permite `db push`, `db reset`, `migration up`, URLs externas, MCP, claves compartidas, `drop database` ni `drop schema`. Si falta una herramienta o la guardia no puede demostrar el destino, informa `BLOCKED` y termina distinto de cero sin iniciar SQL ni limpiar recursos ambiguos. La salida de `supabase start` se captura en un log privado del workspace y nunca se reimprime; tampoco se ejecuta ni imprime `supabase status`, porque ambas salidas pueden incluir secretos.
 
-### Límite explícito del corte 1
+### Gate completo del corte 2
 
-El corte 1 implementa el preflight, guardas, workspace efímero, migración aislada, fixtures y matriz secuencial. Su salida termina siempre con:
+El corte 2 añade dos sesiones reales y acotadas que retiran simultáneamente los dos administradores del hogar A. Ambas alcanzan una barrera en la base antes de ejecutar la operación autenticada; el trigger serializa las retiradas, una queda aceptada y la otra recibe `23514`. El harness exige evidencias `CASE` de ambas sesiones, rechaza timeout, deadlock o códigos de proceso no cero y comprueba como `postgres` que queda exactamente un administrador.
 
-```text
-BLOCKED: concurrency pending
-```
+El código de salida es `0` solo cuando preflight, guardas, migración, fixtures, matriz secuencial, concurrencia y cleanup seguro pasan. Esto sigue sin autorizar por sí mismo aplicar la migración a Supabase real, compartido o persistente: sigue siendo necesaria la autorización explícita y el checklist de esta guía.
 
-Por diseño, su código de salida es distinto de cero. No autoriza aplicar la migración a Supabase real, compartido o persistente. El corte 2 debe añadir y aprobar las dos sesiones concurrentes de retirada del último administrador, además del gate final, antes de retirar ese bloqueo.
-
-`npm test` cubre contratos deterministas del shell, incluido el rechazo de destinos externos/remotos, la propiedad del contenedor, la captura de secretos y la aceptación condicionada del binding wildcard local; no sustituye la ejecución RLS runtime con Supabase CLI + Docker.
+`npm test` cubre contratos deterministas del shell, incluido el rechazo de destinos externos/remotos, la propiedad del contenedor, la captura de secretos, las sesiones concurrentes y la aceptación condicionada del binding wildcard local; no sustituye la ejecución RLS runtime con Supabase CLI + Docker.
 
 ## Estado de conexión actual
 
