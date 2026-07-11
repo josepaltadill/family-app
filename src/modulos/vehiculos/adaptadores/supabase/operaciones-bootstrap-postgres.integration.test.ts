@@ -50,19 +50,42 @@ ejecutar('OperacionesBootstrapPostgres (Postgres local)', () => {
     expect(membresias.rows).toEqual([{ rol: 'admin' }]);
   });
 
+  it('crearHogar acepta nombres con metacaracteres de SQL sin corromper la query (parametrizado)', async () => {
+    const conexion = await obtenerCliente();
+    const operaciones = new OperacionesBootstrapPostgres({ query: conexion.query.bind(conexion) });
+    const nombreConMetacaracteres = `Hogar' OR '1'='1'; DROP TABLE mv_households; -- ${randomUUID()}`;
+
+    const hogar = await operaciones.crearHogar(nombreConMetacaracteres);
+    try {
+      const encontrado = await operaciones.buscarHogarPorNombre(nombreConMetacaracteres);
+      const filas = await conexion.query('select nombre from public.mv_households where id = $1', [hogar.id]);
+
+      // Si el valor se concatenara en vez de parametrizarse, este nombre
+      // rompería la query (sintaxis inválida) o ejecutaría SQL arbitrario en
+      // vez de guardarse tal cual. Que se guarde y se recupere byte a byte
+      // demuestra que viajó como parámetro, no como texto interpolado.
+      expect(encontrado?.id).toBe(hogar.id);
+      expect(filas.rows).toEqual([{ nombre: nombreConMetacaracteres }]);
+    } finally {
+      await conexion.query('delete from public.mv_households where id = $1', [hogar.id]);
+    }
+  });
+
   it('crearUsuario resuelve un email duplicado en vez de crear una segunda fila', async () => {
     const conexion = await obtenerCliente();
     const operaciones = new OperacionesBootstrapPostgres({ query: conexion.query.bind(conexion) });
     const email = `bootstrap-usuario-duplicado-${randomUUID()}@ejemplo.local`;
 
     const primero = await operaciones.crearUsuario(email, 'password-local-de-prueba');
-    const segundo = await operaciones.crearUsuario(email, 'otra-password-distinta');
-    const filas = await conexion.query('select id from auth.users where email = $1', [email]);
+    try {
+      const segundo = await operaciones.crearUsuario(email, 'otra-password-distinta');
+      const filas = await conexion.query('select id from auth.users where email = $1', [email]);
 
-    expect(segundo.id).toBe(primero.id);
-    expect(filas.rows).toHaveLength(1);
-
-    await conexion.query('delete from auth.users where id = $1', [primero.id]);
+      expect(segundo.id).toBe(primero.id);
+      expect(filas.rows).toHaveLength(1);
+    } finally {
+      await conexion.query('delete from auth.users where id = $1', [primero.id]);
+    }
   });
 
   it('crearMembresiaAdmin es idempotente: invocarla dos veces no falla ni duplica la fila', async () => {
@@ -72,20 +95,22 @@ ejecutar('OperacionesBootstrapPostgres (Postgres local)', () => {
     const usuario = await operaciones.crearUsuario(`bootstrap-membresia-${sufijo}@ejemplo.local`, 'password-local-de-prueba');
     const hogar = await operaciones.crearHogar(`Hogar membresía ${sufijo}`);
 
-    await operaciones.crearMembresiaAdmin(hogar.id, usuario.id);
-    await expect(operaciones.crearMembresiaAdmin(hogar.id, usuario.id)).resolves.toBeUndefined();
+    try {
+      await operaciones.crearMembresiaAdmin(hogar.id, usuario.id);
+      await expect(operaciones.crearMembresiaAdmin(hogar.id, usuario.id)).resolves.toBeUndefined();
 
-    const filas = await conexion.query(
-      'select rol from public.mv_household_members where household_id = $1 and user_id = $2',
-      [hogar.id, usuario.id],
-    );
-    expect(filas.rows).toEqual([{ rol: 'admin' }]);
-
-    // Borrar el hogar primero (cascada a la membresía): el trigger de último
-    // admin solo bloquea un delete directo de la membresía mientras el hogar
-    // sigue existiendo, no la cascada de borrar el hogar completo.
-    await conexion.query('delete from public.mv_households where id = $1', [hogar.id]);
-    await conexion.query('delete from auth.users where id = $1', [usuario.id]);
+      const filas = await conexion.query(
+        'select rol from public.mv_household_members where household_id = $1 and user_id = $2',
+        [hogar.id, usuario.id],
+      );
+      expect(filas.rows).toEqual([{ rol: 'admin' }]);
+    } finally {
+      // Borrar el hogar primero (cascada a la membresía): el trigger de último
+      // admin solo bloquea un delete directo de la membresía mientras el hogar
+      // sigue existiendo, no la cascada de borrar el hogar completo.
+      await conexion.query('delete from public.mv_households where id = $1', [hogar.id]);
+      await conexion.query('delete from auth.users where id = $1', [usuario.id]);
+    }
   });
 
   it('crearHogar resuelve un nombre duplicado mediante la restricción única en vez de crear una segunda fila', async () => {
