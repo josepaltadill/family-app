@@ -52,9 +52,9 @@ No se ejecutó una prueba runtime: no se aplicó la migración ni se mutó una b
 
 ## Desviaciones y pendientes
 
-- Pendiente bloqueante: ejecutar y registrar la matriz RLS runtime en una base local/efímera antes de cualquier aplicación real.
-- Pendiente bloqueante: asignar operador, verificar/restaurar backup y ensayar fix-forward/rollback antes de aplicar.
+- Resuelto: la matriz RLS runtime en base local/efímera se ejecutó y registró en el change separado `supabase-rls-runtime-validation` (archivado en `openspec/changes/archive/2026-07-11-supabase-rls-runtime-validation/`, verify-report PASS, 0 blockers, harness `./scripts/validate-supabase-rls.sh` exit 0, incluida concurrencia del último admin y cascade de borrado de hogar).
+- Pendiente bloqueante: asignar operador, verificar/restaurar backup y ensayar fix-forward/rollback antes de aplicar una migración real.
 - Si una aplicación real ocurre, faltará capturar evidencia de la línea base y de la ventana inmediata de monitorización; este corte define el procedimiento, pero no puede producir evidencia sin despliegue.
-- Riesgo residual: la semántica del trigger y su comportamiento concurrente tienen validación estática, pero todavía no evidencia runtime PostgreSQL.
+- Riesgo residual: la semántica del trigger y su comportamiento concurrente ya cuentan con evidencia runtime PostgreSQL (ver change archivado arriba), además de la validación estática de este corte.
 - Advertencia de contexto: `repo-local`; todos los cambios están dentro de `/home/josep/proyectos/manteniment-vehicles`.
-- Estado de implementación: remediación escrita y lista para revisión; despliegue no autorizado mientras falte la validación runtime bloqueante.
+- Estado de implementación: remediación escrita y revisada; la validación RLS runtime bloqueante ya está satisfecha; el despliegue real sigue pendiente de asignar operador/backup/recuperación ensayada.

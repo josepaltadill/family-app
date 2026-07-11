@@ -50,15 +50,15 @@ La app ya tiene dominio y repositorios en memoria, pero todavía no existe una b
 
 ## Criterios de aceptación
 
-- [ ] Existe una migración SQL versionada en `supabase/migrations/` y no fue aplicada contra la base real.
-- [ ] La migración crea solo objetos con prefijo `mv_`.
-- [ ] Las cuatro tablas mínimas están modeladas: `mv_households`, `mv_household_members`, `mv_vehiculos`, `mv_eventos_vehiculo`.
-- [ ] `mv_vehiculos` y `mv_eventos_vehiculo` tienen `household_id` obligatorio.
-- [ ] La integridad impide que un evento referencie un vehículo de otro hogar.
-- [ ] RLS queda activado en las tablas `mv_*` con políticas basadas en membresía de hogar.
-- [ ] El checklist documenta cómo revisar SQL/RLS sin mutar Supabase real.
-- [ ] El guardarraíl de migraciones reconoce las tablas de hogar/membresía como parte del corte permitido.
-- [ ] No se agregan archivos de adapter TypeScript ni código de UI.
+- [x] Existe una migración SQL versionada en `supabase/migrations/` y no fue aplicada contra la base real.
+- [x] La migración crea solo objetos con prefijo `mv_`.
+- [x] Las cuatro tablas mínimas están modeladas: `mv_households`, `mv_household_members`, `mv_vehiculos`, `mv_eventos_vehiculo`.
+- [x] `mv_vehiculos` y `mv_eventos_vehiculo` tienen `household_id` obligatorio.
+- [x] La integridad impide que un evento referencie un vehículo de otro hogar.
+- [x] RLS queda activado en las tablas `mv_*` con políticas basadas en membresía de hogar.
+- [x] El checklist documenta cómo revisar SQL/RLS sin mutar Supabase real.
+- [x] El guardarraíl de migraciones reconoce las tablas de hogar/membresía como parte del corte permitido.
+- [x] No se agregan archivos de adapter TypeScript ni código de UI.
 
 ## Validación esperada
 

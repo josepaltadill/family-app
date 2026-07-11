@@ -165,14 +165,14 @@ El diff completo supera 400 líneas porque incluye los artefactos SDD. Se acepta
 
 ## Checklist de validación esperada
 
-- [ ] El SQL crea solo objetos propios con prefijo `mv_`.
-- [ ] Las cuatro tablas mínimas están presentes.
-- [ ] `household_id` es obligatorio en vehículos y eventos.
-- [ ] La matrícula es única por `(household_id, matricula)` o equivalente.
-- [ ] Un evento no puede referenciar un vehículo de otro hogar.
-- [ ] Kilómetros y costes negativos son rechazados.
-- [ ] RLS está habilitada en todas las tablas `mv_*` del corte.
-- [ ] Las políticas se basan en membresía de `mv_household_members`.
-- [ ] Usuarios anónimos y no miembros quedan denegados.
-- [ ] No hay mutación contra Supabase real.
-- [ ] No hay adaptador TypeScript ni UI en este cambio.
+- [x] El SQL crea solo objetos propios con prefijo `mv_`.
+- [x] Las cuatro tablas mínimas están presentes.
+- [x] `household_id` es obligatorio en vehículos y eventos.
+- [x] La matrícula es única por `(household_id, matricula)` o equivalente.
+- [x] Un evento no puede referenciar un vehículo de otro hogar.
+- [x] Kilómetros y costes negativos son rechazados.
+- [x] RLS está habilitada en todas las tablas `mv_*` del corte.
+- [x] Las políticas se basan en membresía de `mv_household_members`.
+- [x] Usuarios anónimos y no miembros quedan denegados.
+- [x] No hay mutación contra Supabase real.
+- [x] No hay adaptador TypeScript ni UI en este cambio.

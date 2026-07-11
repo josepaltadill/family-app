@@ -133,16 +133,16 @@ La revisión de este corte será estática; **no** se ejecutarán `supabase db p
 
 Checklist de evidencia:
 
-- [ ] Un único archivo versionado crea exactamente las cuatro tablas permitidas.
-- [ ] Tablas, constraints, índices, funciones y policies propias empiezan por `mv_`.
-- [ ] No aparecen `drop schema`, `drop database`, resets ni `cascade` destructivo no justificado.
-- [ ] `(household_id, matricula)` es unique y la FK compuesta evento/vehículo usa el mismo `household_id`.
-- [ ] Checks cubren valores no negativos, `activo`/`inactivo` y `mantenimiento`/`averia`.
-- [ ] RLS se habilita en las cuatro tablas; `anon` no tiene acceso y no existen policies permisivas globales.
-- [ ] Las policies de escritura tienen `with check` y usan las funciones de membresía/rol.
-- [ ] Las funciones `security definer` fijan `search_path`, cualifican objetos y no aceptan identidad arbitraria.
-- [ ] No hay adapter TypeScript, UI, seeds ni evidencia de ejecución real.
-- [ ] El diff completo declara que supera 400 líneas por los artefactos SDD; el payload de implementación sigue pequeño y la excepción `size:exception` para un único commit queda registrada.
+- [x] Un único archivo versionado crea exactamente las cuatro tablas permitidas.
+- [x] Tablas, constraints, índices, funciones y policies propias empiezan por `mv_`.
+- [x] No aparecen `drop schema`, `drop database`, resets ni `cascade` destructivo no justificado.
+- [x] `(household_id, matricula)` es unique y la FK compuesta evento/vehículo usa el mismo `household_id`.
+- [x] Checks cubren valores no negativos, `activo`/`inactivo` y `mantenimiento`/`averia`.
+- [x] RLS se habilita en las cuatro tablas; `anon` no tiene acceso y no existen policies permisivas globales.
+- [x] Las policies de escritura tienen `with check` y usan las funciones de membresía/rol.
+- [x] Las funciones `security definer` fijan `search_path`, cualifican objetos y no aceptan identidad arbitraria.
+- [x] No hay adapter TypeScript, UI, seeds ni evidencia de ejecución real.
+- [x] El diff completo declara que supera 400 líneas por los artefactos SDD; el payload de implementación sigue pequeño y la excepción `size:exception` para un único commit queda registrada.
 
 Una prueba runtime de RLS en una base local/efímera será obligatoria antes de autorizar aplicación real, pero queda fuera de este corte si no existe harness local seguro.
 
@@ -205,7 +205,7 @@ Los umbrales se aplican a la tasa de errores o al porcentaje de solicitudes fuer
 El cambio de implementación deberá:
 
 - ampliar las tablas permitidas a las cuatro `mv_*` de este diseño;
-- sustituir “matrícula única global” por única dentro de `(household_id, matricula)`;
+- sustituir "matrícula única global" por única dentro de `(household_id, matricula)`;
 - exigir `household_id` no nulo y FK compuesta para evento/vehículo;
 - documentar roles `admin`/`editor`, bootstrap server-only y funciones RLS `security definer` endurecidas;
 - añadir al checklist la revisión de `with check`, permisos de `anon`, `search_path` y aislamiento entre hogares;

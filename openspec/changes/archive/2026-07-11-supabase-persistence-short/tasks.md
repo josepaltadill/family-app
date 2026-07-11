@@ -94,4 +94,4 @@ Chain strategy: No aplica
 
 ## Bloqueo antes de despliegue real
 
-- [ ] Ejecutar validación runtime en una base local/efímera para anónimo, no miembro, editor, admin, escrituras cruzadas, conservación del último admin, concurrencia básica y borrado de hogar. Este punto queda fuera de este corte y bloquea aplicar la migración en Supabase real.
+- [x] Ejecutar validación runtime en una base local/efímera para anónimo, no miembro, editor, admin, escrituras cruzadas, conservación del último admin, concurrencia básica y borrado de hogar. Este punto quedó fuera de este corte y se satisfizo en el change separado `supabase-rls-runtime-validation` (archivado en `openspec/changes/archive/2026-07-11-supabase-rls-runtime-validation/`, verify-report PASS, harness `./scripts/validate-supabase-rls.sh` exit 0, incluida concurrencia del último admin y cascade de borrado de hogar).
