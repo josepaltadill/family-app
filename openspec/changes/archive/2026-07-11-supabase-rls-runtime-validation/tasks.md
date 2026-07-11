@@ -9,11 +9,11 @@
 | Chained PRs recommended | Yes |
 | Suggested split | PR 1 → PR 2: preflight/guard/runtime/matriz secuencial → concurrencia y gate final |
 | Delivery strategy | auto-chain |
-| Chain strategy | pending |
+| Chain strategy | executed — cut 1 (WU-1–WU-6, commit `85ff7b1`) then cut 2 (WU-7–WU-8, commit `11c625f`), both on `main` |
 
-Decision needed before apply: Yes
+Decision needed before apply: Yes (resolved)
 Chained PRs recommended: Yes
-Chain strategy: pending
+Chain strategy: executed — see table above
 400-line budget risk: High
 
 ## Resultado y límites

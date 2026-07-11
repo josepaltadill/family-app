@@ -1,6 +1,8 @@
 # Apply progress — PR/cut 1 remediation
 
-## Status
+> **Final status: PASS.** This file records cut 1 history first (historically `BLOCKED`, by design, pending concurrency) and cut 2 last. See "Cut 2 — last-admin concurrency and final gate" below for the final gate that supersedes the cut 1 status.
+
+## Cut 1 status (historical — superseded by cut 2 below)
 
 **BLOCKED.** Cut 1 remains non-zero and does not authorize deployment. WU-5 sequential matrix now passes in local/ephemeral Supabase; the remaining blocker is WU-7/WU-8 concurrency. Supabase CLI 2.109.1 and Docker are available; the harness was adjusted for the CLI's wildcard local bindings, secret-bearing start output, and explicit PostgreSQL identity.
 
@@ -47,6 +49,8 @@ Earlier generated runtimes that reached container startup were manually stopped 
 The remaining sequential cases were added under strict TDD, including admin B isolation, event and membership policy operations, remaining check constraints, last-admin demote/transfer and allowed-second-admin paths, privileged post-negative state checks, and explicit household-delete cascade verification. The harness also now propagates a failed migration/fixture/assertion `psql` step instead of incorrectly reporting a sequential-matrix pass.
 
 The first local/ephemeral continuation run exposed a **product migration defect**: `mv_vehiculos.household_id` referenced `mv_households(id)` without `ON DELETE CASCADE`, so explicit household deletion failed with SQLSTATE `23503`. The product migration was then updated so household deletion cascades to vehicles and events. The cascade assertion now deletes the household as authenticated `admin_b`, then resets to privileged inspection for postconditions, proving the externally visible RLS contract as well as FK mechanics.
+
+This cascade fix was committed as part of cut 1 (commit `85ff7b1`) before cut 2 began. It is therefore already present in `HEAD`, which is why `verify-report.md`'s `git diff -- supabase/migrations/20260710000000_supabase_persistence_short.sql` shows no diff: there is no pending, uncommitted change to the migration — the fix's provenance is the cut 1 commit, not cut 2.
 
 ### TDD Cycle Evidence
 
