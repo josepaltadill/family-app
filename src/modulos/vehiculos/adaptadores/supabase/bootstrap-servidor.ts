@@ -23,6 +23,7 @@
 // importar este módulo.
 import 'server-only';
 import { crearIdentificador, type Identificador } from '../../../../compartido/dominio/identificador';
+import type { RolUsuario } from '../../dominio/rol-usuario';
 
 export class ErrorRaceBootstrapHogar extends Error {
   constructor(nombre: string, cantidadEncontrada: number) {
@@ -55,7 +56,7 @@ export type OperacionesBootstrap = Readonly<{
   crearHogar(nombre: string): Promise<{ id: string }>;
   /** Re-query usado tras crear un hogar para detectar duplicados por condición de carrera (ver comentario de módulo). */
   contarHogaresPorNombre(nombre: string): Promise<number>;
-  buscarMembresia(householdId: string, userId: string): Promise<{ rol: string } | null>;
+  buscarMembresia(householdId: string, userId: string): Promise<{ rol: RolUsuario } | null>;
   crearMembresiaAdmin(householdId: string, userId: string): Promise<void>;
 }>;
 

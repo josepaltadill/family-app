@@ -76,10 +76,18 @@ ejecutar('OperacionesBootstrapPostgres (Postgres local)', () => {
     const segundo = await operaciones.crearHogar(nombreVariante);
     const encontradoPorVariante = await operaciones.buscarHogarPorNombre(nombreVariante);
     const conteo = await operaciones.contarHogaresPorNombre(nombreVariante);
+    const filaAlmacenada = await conexion.query<{ nombre: string }>(
+      'select nombre from public.mv_households where id = $1',
+      [primero.id],
+    );
 
     expect(segundo.id).toBe(primero.id);
     expect(encontradoPorVariante?.id).toBe(primero.id);
     expect(conteo).toBe(1);
+    // El conflicto con la variante NO debe reescribir el nombre canónico ya
+    // guardado: `do update set nombre = mv_households.nombre` debe conservar
+    // el nombre original, no adoptar el de la variante entrante.
+    expect(filaAlmacenada.rows).toEqual([{ nombre: nombreOriginal }]);
 
     await conexion.query('delete from public.mv_households where id = $1', [primero.id]);
   });

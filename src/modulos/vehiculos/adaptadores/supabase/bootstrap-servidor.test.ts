@@ -5,6 +5,7 @@ import {
   sembrarHogarDeDesarrollo,
   type OperacionesBootstrap,
 } from './bootstrap-servidor';
+import type { RolUsuario } from '../../dominio/rol-usuario';
 
 const entornoBootstrap = {
   bootstrapEmail: 'admin-desarrollo@ejemplo.local',
@@ -15,12 +16,12 @@ const entornoBootstrap = {
 function crearOperacionesFalsas(): { operaciones: OperacionesBootstrap; estado: {
   usuario: { id: string } | null;
   hogar: { id: string } | null;
-  membresia: { rol: string } | null;
+  membresia: { rol: RolUsuario } | null;
 } } {
   const estado: {
     usuario: { id: string } | null;
     hogar: { id: string } | null;
-    membresia: { rol: string } | null;
+    membresia: { rol: RolUsuario } | null;
   } = { usuario: null, hogar: null, membresia: null };
 
   const operaciones: OperacionesBootstrap = {
