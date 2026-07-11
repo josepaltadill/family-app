@@ -20,31 +20,67 @@ function crearCliente(): ClientePostgresBootstrap & { query: ReturnType<typeof v
 }
 
 describe('OperacionesBootstrapPostgres', () => {
-  it('crea o reutiliza el usuario por email mediante SQL parametrizado y solo administrativo', async () => {
+  it('crea el usuario y devuelve el id de la fila que la base retornó', async () => {
     const cliente = crearCliente();
     const operaciones = new OperacionesBootstrapPostgres(cliente);
 
     const usuario = await operaciones.crearUsuario('admin@ejemplo.local', 'secreto-de-prueba');
 
     expect(usuario.id).toBe('11111111-1111-4111-8111-111111111111');
-    expect(cliente.query).toHaveBeenCalledWith(
-      expect.stringContaining('insert into auth.users'),
-      ['admin@ejemplo.local', 'secreto-de-prueba'],
-    );
-    expect(cliente.query.mock.calls[0]?.[0]).toContain('on conflict (email)');
   });
 
-  it('crea o reutiliza el hogar usando el índice único normalizado de nombre', async () => {
+  it('nunca interpola el email ni la contraseña en el texto de la query (SQL parametrizado)', async () => {
+    const cliente = crearCliente();
+    const operaciones = new OperacionesBootstrapPostgres(cliente);
+
+    await operaciones.crearUsuario('admin@ejemplo.local', 'secreto-de-prueba');
+
+    const [sql, valores] = cliente.query.mock.calls[0] ?? [];
+    expect(sql).not.toContain('admin@ejemplo.local');
+    expect(sql).not.toContain('secreto-de-prueba');
+    expect(valores).toEqual(['admin@ejemplo.local', 'secreto-de-prueba']);
+  });
+
+  it('lanza si la base no devuelve ninguna fila al crear el usuario', async () => {
+    const cliente = { query: vi.fn(async () => ({ rows: [] })) } as unknown as ClientePostgresBootstrap & {
+      query: ReturnType<typeof vi.fn>;
+    };
+    const operaciones = new OperacionesBootstrapPostgres(cliente);
+
+    await expect(operaciones.crearUsuario('admin@ejemplo.local', 'x')).rejects.toThrow(
+      /no se pudo crear ni recuperar el usuario/i,
+    );
+  });
+
+  it('crea el hogar y devuelve el id de la fila que la base retornó', async () => {
+    const cliente = crearCliente();
+    const operaciones = new OperacionesBootstrapPostgres(cliente);
+
+    const hogar = await operaciones.crearHogar('Hogar de desarrollo');
+
+    expect(hogar.id).toBe('11111111-1111-4111-8111-111111111111');
+  });
+
+  it('nunca interpola el nombre del hogar en el texto de la query (SQL parametrizado)', async () => {
     const cliente = crearCliente();
     const operaciones = new OperacionesBootstrapPostgres(cliente);
 
     await operaciones.crearHogar('Hogar de desarrollo');
 
-    expect(cliente.query).toHaveBeenCalledWith(
-      expect.stringContaining('insert into public.mv_households'),
-      ['Hogar de desarrollo'],
+    const [sql, valores] = cliente.query.mock.calls[0] ?? [];
+    expect(sql).not.toContain('Hogar de desarrollo');
+    expect(valores).toEqual(['Hogar de desarrollo']);
+  });
+
+  it('lanza si la base no devuelve ninguna fila al crear el hogar', async () => {
+    const cliente = { query: vi.fn(async () => ({ rows: [] })) } as unknown as ClientePostgresBootstrap & {
+      query: ReturnType<typeof vi.fn>;
+    };
+    const operaciones = new OperacionesBootstrapPostgres(cliente);
+
+    await expect(operaciones.crearHogar('Hogar de desarrollo')).rejects.toThrow(
+      /no se pudo crear ni recuperar el hogar/i,
     );
-    expect(cliente.query.mock.calls[0]?.[0]).toContain("on conflict (lower(btrim(nombre, E' \\t\\n\\r')))");
   });
 
   it('no sobrescribe el nombre canónico ya guardado cuando el conflicto lo dispara una variante', async () => {
@@ -116,17 +152,23 @@ describe('OperacionesBootstrapPostgres', () => {
     await expect(operaciones.buscarMembresia('hogar-1', 'usuario-1')).rejects.toThrow(/rol.*desconocido/i);
   });
 
-  it('crea la membresía admin idempotentemente sin interpolar identificadores', async () => {
+  it('crea la membresía admin sin lanzar', async () => {
+    const cliente = crearCliente();
+    const operaciones = new OperacionesBootstrapPostgres(cliente);
+
+    await expect(operaciones.crearMembresiaAdmin('hogar-1', 'usuario-1')).resolves.toBeUndefined();
+  });
+
+  it('nunca interpola los identificadores de hogar/usuario en el texto de la query (SQL parametrizado)', async () => {
     const cliente = crearCliente();
     const operaciones = new OperacionesBootstrapPostgres(cliente);
 
     await operaciones.crearMembresiaAdmin('hogar-1', 'usuario-1');
 
-    expect(cliente.query).toHaveBeenCalledWith(
-      expect.stringContaining('insert into public.mv_household_members'),
-      ['hogar-1', 'usuario-1'],
-    );
-    expect(cliente.query.mock.calls[0]?.[0]).toContain('on conflict (household_id, user_id) do nothing');
+    const [sql, valores] = cliente.query.mock.calls[0] ?? [];
+    expect(sql).not.toContain('hogar-1');
+    expect(sql).not.toContain('usuario-1');
+    expect(valores).toEqual(['hogar-1', 'usuario-1']);
   });
 
   it('cierra la conexión administrativa cuando el proceso de bootstrap termina', async () => {
@@ -423,5 +465,51 @@ describe('ejecutarBootstrapPostgresDesdeEntorno', () => {
     ).rejects.toBe(errorSiembra);
 
     expect(operaciones.cerrar).toHaveBeenCalledOnce();
+  });
+
+  describe('validación de variables privadas', () => {
+    function dependenciasFalsas() {
+      const crearOperaciones = vi.fn(async () => ({ cerrar: vi.fn(async () => undefined) }));
+      const sembrar = vi.fn(async () => ({ householdId: { valor: 'x' }, userId: { valor: 'y' } }));
+      return { crearOperaciones, sembrar };
+    }
+
+    it.each([
+      'SUPABASE_BOOTSTRAP_DATABASE_URL',
+      'SUPABASE_BOOTSTRAP_EMAIL',
+      'SUPABASE_BOOTSTRAP_PASSWORD',
+      'SUPABASE_BOOTSTRAP_HOUSEHOLD_NOMBRE',
+    ])('falla si falta %s, sin intentar crear la conexión administrativa', async (variableFaltante) => {
+      const entornoIncompleto = { ...entorno, [variableFaltante]: undefined };
+      const { crearOperaciones, sembrar } = dependenciasFalsas();
+
+      await expect(
+        ejecutarBootstrapPostgresDesdeEntorno(entornoIncompleto, {
+          crearOperaciones: crearOperaciones as never,
+          sembrar: sembrar as never,
+        }),
+      ).rejects.toThrow(new RegExp(`Falta la variable privada obligatoria ${variableFaltante}`));
+      expect(crearOperaciones).not.toHaveBeenCalled();
+      expect(sembrar).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      'SUPABASE_BOOTSTRAP_DATABASE_URL',
+      'SUPABASE_BOOTSTRAP_EMAIL',
+      'SUPABASE_BOOTSTRAP_PASSWORD',
+      'SUPABASE_BOOTSTRAP_HOUSEHOLD_NOMBRE',
+    ])('falla si %s es solo espacios, sin intentar crear la conexión administrativa', async (variableVacia) => {
+      const entornoConEspacios = { ...entorno, [variableVacia]: '   ' };
+      const { crearOperaciones, sembrar } = dependenciasFalsas();
+
+      await expect(
+        ejecutarBootstrapPostgresDesdeEntorno(entornoConEspacios, {
+          crearOperaciones: crearOperaciones as never,
+          sembrar: sembrar as never,
+        }),
+      ).rejects.toThrow(new RegExp(`Falta la variable privada obligatoria ${variableVacia}`));
+      expect(crearOperaciones).not.toHaveBeenCalled();
+      expect(sembrar).not.toHaveBeenCalled();
+    });
   });
 });

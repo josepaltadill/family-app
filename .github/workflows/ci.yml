@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      # A plain Postgres service container has no `auth` schema, no
+      # `extensions.crypt`/`gen_salt`, and none of the other Supabase-managed
+      # bootstrapping the migrations and bootstrap-admin code depend on.
+      # Starting the real local Supabase stack (same as `supabase db reset`
+      # in local dev) is what actually reproduces the schema correctly.
+      # Deferred until after the cheaper type-check/build steps so a failure
+      # there doesn't pay for spinning up the Docker-based stack first.
+      - name: Setup Supabase CLI
+        id: setup-cli
+        uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
+        with:
+          version: latest
+
+      - name: Start local Supabase stack
+        run: supabase start
+
+      - name: Run tests
+        run: npm test
+        env:
+          SUPABASE_BOOTSTRAP_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+
+      # Guarded on the CLI setup step having actually run: if type-check/build
+      # fails before this point, `supabase` was never installed, and these
+      # cleanup steps would otherwise fail with "command not found" instead
+      # of just being skipped.
+      - name: Dump Supabase stack status on failure
+        if: failure() && steps.setup-cli.outcome == 'success'
+        run: supabase status
+
+      - name: Stop local Supabase stack
+        if: always() && steps.setup-cli.outcome == 'success'
+        run: supabase stop
