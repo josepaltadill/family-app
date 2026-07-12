@@ -324,10 +324,16 @@ razonables (`dev@ejemplo.local`, `Hogar de desarrollo`,
 `SUPABASE_BOOTSTRAP_EMAIL`/`_PASSWORD`/`_HOUSEHOLD_NOMBRE`/`VEHICULOS_ACCESS_TOKEN`
 antes de invocarlo.
 
-Cualquier cliente HTTP (navegador, `curl`, un test) debe mandar el header
-`x-vehiculos-access-token` con el mismo valor de `VEHICULOS_ACCESS_TOKEN`, o
-`/vehiculos` responde 500 (`ErrorAccesoVehiculos`, ver
-`dependencias-servidor.ts`) — es el guard de acceso de PR3, no un bug.
+Para QA manual, después de ejecutar `npm run dev:local`, abrir
+`http://127.0.0.1:3000/vehiculos` en un navegador normal. El script arranca Next en
+`127.0.0.1:3001` y un proxy HTTP propio en `127.0.0.1:3000`; ambos quedan ligados
+exclusivamente a loopback. El proxy inyecta en cada request el header
+`x-vehiculos-access-token` con `VEHICULOS_ACCESS_TOKEN`, sin mostrar el valor en
+logs. También reenvía upgrades WebSocket para el HMR de Next.
+
+No existe un bypass de aplicación para desarrollo local: el guard de servidor
+siempre exige el token correcto. Fuera del proxy local —incluidos producción y
+servidores no locales— cada cliente HTTP debe mandar ese mismo header.
 
 Si se prefiere correr los pasos a mano (o entender qué hace el script), son,
 en orden:
@@ -342,7 +348,9 @@ en orden:
    `SUPABASE_BOOTSTRAP_EMAIL`/`_PASSWORD`/`_HOUSEHOLD_NOMBRE` (las mismas del
    paso 2) y `SUPABASE_HOUSEHOLD_ID_DESARROLLO` (el `householdId` real que
    imprimió el paso 2).
-4. Setear `VEHICULOS_ACCESS_TOKEN` y mandar el header correspondiente en cada
-   request a `/vehiculos`.
+4. Setear `VEHICULOS_ACCESS_TOKEN`. Para reproducir manualmente el flujo del
+   navegador también hace falta un proxy ligado a loopback que inyecte
+   `x-vehiculos-access-token`; `scripts/dev-local.sh` contiene la implementación
+   soportada. Sin ese proxy, cada request a `/vehiculos` debe mandar el header.
 
 Ver `.env.local.example` para una plantilla copiable de las 7 variables.

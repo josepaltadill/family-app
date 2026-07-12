@@ -44,9 +44,73 @@ if [[ -z "$household_id" ]]; then
 fi
 export SUPABASE_HOUSEHOLD_ID_DESARROLLO="$household_id"
 
+child_pids=()
+cleanup() {
+  if ((${#child_pids[@]})); then
+    kill "${child_pids[@]}" 2>/dev/null || true
+    wait "${child_pids[@]}" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT INT TERM
+
+npm run dev -- --hostname 127.0.0.1 --port 3001 &
+child_pids+=("$!")
+
+node <<'NODE' &
+const http = require('node:http');
+const net = require('node:net');
+
+const token = process.env.VEHICULOS_ACCESS_TOKEN;
+if (!token) throw new Error('Falta VEHICULOS_ACCESS_TOKEN para el proxy local.');
+
+const proxy = http.createServer((request, response) => {
+  const upstream = http.request({
+    hostname: '127.0.0.1',
+    port: 3001,
+    method: request.method,
+    path: request.url,
+    headers: { ...request.headers, 'x-vehiculos-access-token': token },
+  }, (upstreamResponse) => {
+    response.writeHead(upstreamResponse.statusCode ?? 502, upstreamResponse.headers);
+    upstreamResponse.pipe(response);
+  });
+  upstream.on('error', () => {
+    if (!response.headersSent) response.writeHead(502);
+    response.end('El servidor local todavía no está disponible.');
+  });
+  request.pipe(upstream);
+});
+
+proxy.on('upgrade', (request, socket, head) => {
+  const upstream = net.connect(3001, '127.0.0.1', () => {
+    const headers = { ...request.headers, 'x-vehiculos-access-token': token };
+    upstream.write(`${request.method} ${request.url} HTTP/${request.httpVersion}\r\n`);
+    for (const [name, value] of Object.entries(headers)) {
+      if (Array.isArray(value)) {
+        for (const item of value) upstream.write(`${name}: ${item}\r\n`);
+      } else if (value !== undefined) {
+        upstream.write(`${name}: ${value}\r\n`);
+      }
+    }
+    upstream.write('\r\n');
+    if (head.length) upstream.write(head);
+    socket.pipe(upstream).pipe(socket);
+  });
+  upstream.on('error', () => socket.destroy());
+});
+
+proxy.listen(3000, '127.0.0.1', () => {
+  console.log('Proxy local listo en http://127.0.0.1:3000/vehiculos');
+});
+NODE
+child_pids+=("$!")
+
 echo ""
-echo "Listo. Levantando next dev (VEHICULOS_ACCESS_TOKEN=$VEHICULOS_ACCESS_TOKEN)."
-echo "Cualquier cliente HTTP debe mandar el header x-vehiculos-access-token con ese valor."
+echo "Next y el proxy escuchan exclusivamente en 127.0.0.1."
+echo "Abrí http://127.0.0.1:3000/vehiculos; el proxy agrega la prueba de acceso localmente."
+echo "Fuera de este proxy, los clientes HTTP deben presentar el token."
 echo ""
 
-exec npm run dev
+status=0
+wait -n "${child_pids[@]}" || status=$?
+exit "$status"

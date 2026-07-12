@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EntornoSupabase } from '../../../../compartido/infraestructura/entorno';
 
@@ -44,6 +45,25 @@ describe('crearDependenciasVehiculos', () => {
 
   it('permite componer dependencias con una prueba de acceso válida', async () => {
     await expect(crearDependenciasVehiculos(entornoDePrueba, pruebaValida)).resolves.toBeDefined();
+  });
+
+  it('mantiene el acceso local sin header bloqueado por el guard de aplicación', async () => {
+    await expect(
+      crearDependenciasVehiculos(entornoDePrueba, {
+        tokenPresentado: null,
+        tokenEsperado: 'secreto-mvp',
+      }),
+    ).rejects.toBeInstanceOf(ErrorAccesoVehiculos);
+    expect(crearClienteSupabaseServidor).not.toHaveBeenCalled();
+  });
+
+  it('configura el proxy local y Next solo en loopback e inyecta el token', () => {
+    const scriptDevLocal = readFileSync('scripts/dev-local.sh', 'utf8');
+
+    expect(scriptDevLocal).toContain('npm run dev -- --hostname 127.0.0.1 --port 3001');
+    expect(scriptDevLocal).toContain("proxy.listen(3000, '127.0.0.1'");
+    expect(scriptDevLocal).toContain("'x-vehiculos-access-token': token");
+    expect(scriptDevLocal).not.toContain('VEHICULOS_LOCAL_DEV_ACCESS');
   });
 
   it('compone repositorios Supabase reales para vehículos y eventos', async () => {
