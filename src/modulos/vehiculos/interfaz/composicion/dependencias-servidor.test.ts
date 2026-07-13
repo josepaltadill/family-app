@@ -72,10 +72,11 @@ describe('crearDependenciasVehiculos', () => {
 
   it('ignora autoridad manipulada y conserva el contexto del servidor', async () => {
     const dependencias = await crearDependenciasVehiculos(ENTORNO);
-    await listarVehiculos({ ...dependencias,
+    const dependenciasManipuladas = { ...dependencias,
       householdId: { valor: '99999999-9999-4999-8999-999999999999' },
       actor: { id: { valor: '99999999-9999-4999-8999-999999999999' }, rol: 'admin' },
-    });
+    };
+    await listarVehiculos(dependenciasManipuladas);
     expect(mocks.listar).toHaveBeenCalledWith(CONTEXTO.householdId);
     expect(mocks.resolverAcceso).toHaveBeenCalledOnce();
   });
