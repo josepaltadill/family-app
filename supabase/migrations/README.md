@@ -185,10 +185,10 @@ Supabase real disponible — ver blocker documentado en `apply-progress.md`.
 
 PR3 (interfaz mínima + server actions, `src/modulos/vehiculos/interfaz/composicion/dependencias-servidor.ts`)
 compone las server actions/páginas contra los adaptadores Supabase reales de PR2
-(`RepositorioVehiculosSupabase`, `RepositorioEventosSupabase`), pero **no** resuelve
-auth real ni ejecuta el bootstrap en cada petición: sigue usando el patrón temporal
-de identidad de PR1/PR2 (`ProveedorIdentidadTemporal`), construido con un
-`householdId` fijo. Como `mv_households.id`/`mv_vehiculos.household_id` son `uuid`
+(`RepositorioVehiculosSupabase`, `RepositorioEventosSupabase`). El acceso familiar
+se resuelve una sola vez por petición mediante composición server-side y el bootstrap
+no se ejecuta en cada petición. Las pruebas aisladas usan `ContextoFamiliarTemporal`
+con un `householdId` fijo. Como `mv_households.id`/`mv_vehiculos.household_id` son `uuid`
 reales, ese valor fijo debe ser el UUID real ya sembrado por
 `sembrarHogarDeDesarrollo` (ejecutado una única vez, fuera de banda, por un operador
 con acceso administrativo — sigue sin implementación real en este PR, ver arriba),
