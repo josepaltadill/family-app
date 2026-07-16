@@ -1,30 +1,57 @@
 proyecto: family-app
 idioma: es
 almacen_artefactos: both
+
 sdd:
   modo: interactivo
+  cambio_activo: family-app-modularization
   estrategia_pr: auto-forecast
   presupuesto_revision_lineas_cambiadas: 400
+
 calidad:
   tdd_estricto: true
   comando_tests: "npm test"
+  runner: vitest
+  entorno_tests: node
+  patrones_tests:
+    - "src/**/*.test.ts"
+    - "src/**/*.test.tsx"
+
+stack:
+  runtime: node
+  gestor_paquetes: npm
+  lenguaje: typescript
+  framework: "Next.js 16 (App Router)"
+  interfaz: "React 19"
+  persistencia: "Supabase/PostgreSQL"
+  validacion: "Zod 4"
+  estilos: "Tailwind CSS 4"
+  tests: "Vitest 4 + Testing Library"
+
 convenciones:
-  prefijo_tablas_supabase: "mv_"
   idioma_codigo: es
   idioma_documentacion: es
-notas:
-  - "Aplicación privada para el control de mantenimientos de vehículos."
-  - "Los artefactos se guardan en OpenSpec y se reflejan en Engram cuando sea relevante."
-  - "El proyecto usará nombres, comentarios y documentación en español por preferencia explícita del usuario."
+  arquitectura: "modular con separación de dominio, aplicación, infraestructura e interfaz"
+  alias_importaciones: "@/* -> ./src/*"
+  persistencia:
+    estado_actual: "Los objetos productivos existentes usan el prefijo mv_."
+    contrato_objetivo_cambio_activo:
+      nucleo: "fam_*"
+      modulo_vehiculos: "fam_ve_*"
+    regla_transicion: "El cambio family-app-modularization coordina el corte; no tratar fam_*/fam_ve_* como estado ya aplicado."
+
 contexto_derivado:
-  estado_repositorio: "greenfield; todavía no hay stack de aplicación definido"
-  artefactos_existentes:
-    - "openspec/changes/vehicle-maintenance-app/propuesta.md"
-  git: "no inicializado en este directorio"
+  estado_repositorio: "aplicación existente y versionada en Git"
+  rama_observada: main
+  stack_detectado_desde: package.json
+  configuracion_tests_detectada_desde: vitest.config.ts
+  cambio_activo: "openspec/changes/family-app-modularization/"
+  contexto_proyecto: "openspec/contexto-proyecto.md"
+
 reglas_fases:
   propuesta: "mantener el alcance del MVP privado familiar y documentar decisiones pendientes"
   especificacion: "derivar criterios verificables desde la propuesta sin ampliar alcance"
-  diseno: "separar dominio, persistencia, interfaz y autenticación futura"
-  tareas: "planificar cortes revisables respetando el presupuesto de 400 líneas cambiadas"
-  aplicacion: "usar TDD estricto cuando exista el runner configurado; no degradar a modo estándar sin decisión explícita"
-  verificacion: "validar contra criterios de aceptación y registrar evidencia"
+  diseno: "separar dominio, aplicación, infraestructura e interfaz; distinguir el esquema mv_* actual del contrato fam_*/fam_ve_* objetivo"
+  tareas: "planificar cortes revisables respetando el presupuesto de 400 líneas cambiadas y la estrategia auto-forecast"
+  aplicacion: "usar TDD estricto con npm test; no degradar a modo estándar sin decisión explícita"
+  verificacion: "validar contra criterios de aceptación y registrar evidencia reproducible"

@@ -6,28 +6,39 @@ Aplicación privada familiar para gestionar vehículos, mantenimientos, averías
 
 ## Estado actual
 
-- Git está inicializado en este directorio.
-- Existe una aplicación con `package.json` basada en Next.js, React, TypeScript, Supabase y Vitest.
+- El repositorio Git está inicializado y contiene una aplicación existente.
+- La aplicación usa Node.js, npm, TypeScript 5.9, Next.js 16 con App Router y React 19.
+- La persistencia usa Supabase/PostgreSQL; Zod 4 valida datos y Tailwind CSS 4 proporciona estilos.
+- El código actual está organizado bajo `src/app`, `src/compartido` y `src/modulos`.
 - El cambio activo es `openspec/changes/family-app-modularization/`.
-- El contrato final de persistencia usa `fam_*` para el núcleo y `fam_ve_*` para vehículos.
-- Las pruebas se ejecutan con `npm test`.
-- Engram está disponible actualmente.
+- La persistencia productiva actual todavía usa objetos `mv_*`.
+- El contrato objetivo del cambio activo usa `fam_*` para el núcleo y `fam_ve_*` para vehículos; no se considera aplicado hasta ejecutar y verificar el cambio.
+
+## Pruebas y calidad
+
+- Runner: Vitest 4, con Testing Library disponible.
+- Comando: `npm test` (`vitest run`).
+- Entorno predeterminado: Node.
+- Descubrimiento: `src/**/*.test.ts` y `src/**/*.test.tsx`.
+- TDD estricto: activo.
 
 ## Convenciones obligatorias
 
 - Artefactos técnicos en español por decisión explícita del usuario.
 - Documentación, comentarios, clases, funciones, variables y configuración generada en español.
-- Tablas del núcleo de Supabase con prefijo `fam_` y tablas del módulo de vehículos con prefijo `fam_ve_` como contrato final.
+- Alias de importación TypeScript: `@/*` apunta a `./src/*`.
+- Mantener separadas las capas de dominio, aplicación, infraestructura e interfaz durante la modularización.
+- Distinguir siempre el estado actual `mv_*` del contrato final `fam_*`/`fam_ve_*` definido por el cambio activo.
 
 ## SDD
 
 - Modo de ejecución: interactivo.
-- Almacén de artefactos: OpenSpec y Engram, disponible actualmente.
+- Almacén de artefactos: OpenSpec autoritativo con reflejo en Engram (`both`).
 - Estrategia de PR: auto-forecast.
 - Presupuesto de revisión: 400 líneas cambiadas.
-- TDD estricto: activo.
-- Comando de tests configurado: `npm test`.
+- Cambio activo: `family-app-modularization`.
 
 ## Riesgos conocidos
 
-- El contrato de persistencia actual todavía usa `mv_*`; el cambio activo planifica un corte atómico y coordinado al contrato final `fam_*`/`fam_ve_*`.
+- El corte de persistencia afecta tablas, relaciones, índices, restricciones, funciones, triggers, políticas RLS, grants y consumidores de código; debe mantenerse coordinado y no destructivo según los artefactos del cambio activo.
+- Las especificaciones históricas conservan referencias `mv_*`; no deben confundirse con el contrato objetivo del cambio activo ni reescribirse como parte de esta inicialización.
