@@ -1,11 +1,11 @@
 import type { Identificador } from '../../../../compartido/dominio/identificador';
 import type { EventoVehiculo } from '../../dominio/evento-vehiculo';
-import type { ProveedorIdentidad } from '../puertos/proveedor-identidad';
+import type { ContextoAplicacion } from '../../../../nucleo-familiar/aplicacion/puertos/alcance-familiar';
 import type { RepositorioEventosVehiculo } from '../puertos/repositorio-eventos-vehiculo';
 
 export type DependenciasListarEventosVehiculo = Readonly<{
   repositorioEventosVehiculo: RepositorioEventosVehiculo;
-  proveedorIdentidad: ProveedorIdentidad;
+  proveedorIdentidad: ContextoAplicacion;
 }>;
 
 export type EntradaListarEventosVehiculo = Readonly<{
@@ -16,7 +16,7 @@ export async function listarEventosVehiculo(
   dependencias: DependenciasListarEventosVehiculo,
   entrada: EntradaListarEventosVehiculo,
 ): Promise<EventoVehiculo[]> {
-  const { householdId } = await dependencias.proveedorIdentidad.obtenerContexto();
+  const { householdId } = dependencias.proveedorIdentidad;
 
   return dependencias.repositorioEventosVehiculo.listarPorVehiculo(householdId, entrada.vehiculoId);
 }

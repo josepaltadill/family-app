@@ -1,49 +1,30 @@
 import 'server-only';
 
-import { cookies } from 'next/headers';
-import { leerEntornoRuntimeSupabase, type EntornoRuntimeSupabase } from '../../../../compartido/infraestructura/entorno';
-import { crearClienteSupabaseSsrPorSolicitud } from '../../../../compartido/infraestructura/supabase/cliente-supabase-ssr';
 import type { ProveedorFecha } from '../../aplicacion/puertos/proveedor-fecha';
-import type { ProveedorIdentidad } from '../../aplicacion/puertos/proveedor-identidad';
-import { exigirContextoFamiliar } from '../../aplicacion/servicios/resolver-acceso-familiar';
+import type { ContextoAplicacion } from '../../../../nucleo-familiar/aplicacion/puertos/alcance-familiar';
 import { ProveedorFechaSistema } from '../../adaptadores/sistema/proveedor-fecha-sistema';
-import { ProveedorIdentidadSupabaseServidor } from '../../adaptadores/supabase/proveedor-identidad-supabase-servidor';
 import { RepositorioEventosSupabase } from '../../adaptadores/supabase/repositorio-eventos-supabase';
 import { RepositorioVehiculosSupabase } from '../../adaptadores/supabase/repositorio-vehiculos-supabase';
+import type { ClienteSupabaseSsr } from '../../../../compartido/infraestructura/supabase/cliente-supabase-ssr';
 import type { RepositorioEventosVehiculo, UnidadTrabajoVehiculos } from '../../aplicacion/puertos/repositorio-eventos-vehiculo';
 import type { RepositorioVehiculos } from '../../aplicacion/puertos/repositorio-vehiculos';
 
+export type AlcanceFamiliar = Readonly<{ clienteSupabase: ClienteSupabaseSsr; contextoFamiliar: ContextoAplicacion }>;
 export type DependenciasVehiculos = Readonly<{
   repositorioVehiculos: RepositorioVehiculos;
   repositorioEventosVehiculo: RepositorioEventosVehiculo;
   unidadTrabajoVehiculos: UnidadTrabajoVehiculos;
-  proveedorIdentidad: ProveedorIdentidad;
+  proveedorIdentidad: ContextoAplicacion;
   proveedorFecha: ProveedorFecha;
 }>;
 
-export async function crearDependenciasVehiculos(
-  entorno: EntornoRuntimeSupabase = leerEntornoRuntimeSupabase(),
-): Promise<DependenciasVehiculos> {
-  const almacenCookies = await cookies();
-  const cliente = crearClienteSupabaseSsrPorSolicitud(entorno, {
-    getAll: () => almacenCookies.getAll(),
-    setAll: (cookiesParaEscribir) => {
-      for (const { name, value, options } of cookiesParaEscribir) almacenCookies.set(name, value, options);
-    },
-  });
-  const proveedorResolucion = new ProveedorIdentidadSupabaseServidor(cliente);
-  const contexto = await exigirContextoFamiliar(proveedorResolucion);
-  const proveedorIdentidad: ProveedorIdentidad = {
-    obtenerContexto: async () => contexto,
-    resolverAcceso: async () => ({ estado: 'concedido', contexto }),
-  };
-  const repositorioEventosSupabase = new RepositorioEventosSupabase(cliente);
-
+export function crearDependenciasVehiculos(alcance: AlcanceFamiliar): DependenciasVehiculos {
+  const repositorioEventosSupabase = new RepositorioEventosSupabase(alcance.clienteSupabase);
   return {
-    repositorioVehiculos: new RepositorioVehiculosSupabase(cliente),
+    repositorioVehiculos: new RepositorioVehiculosSupabase(alcance.clienteSupabase),
     repositorioEventosVehiculo: repositorioEventosSupabase,
     unidadTrabajoVehiculos: repositorioEventosSupabase,
-    proveedorIdentidad,
+    proveedorIdentidad: alcance.contextoFamiliar,
     proveedorFecha: new ProveedorFechaSistema(),
   };
 }

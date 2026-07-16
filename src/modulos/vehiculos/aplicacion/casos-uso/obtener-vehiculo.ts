@@ -1,12 +1,12 @@
 import type { Identificador } from '../../../../compartido/dominio/identificador';
 import { ErrorDominio } from '../../dominio/errores-dominio';
 import type { Vehiculo } from '../../dominio/vehiculo';
-import type { ProveedorIdentidad } from '../puertos/proveedor-identidad';
+import type { ContextoAplicacion } from '../../../../nucleo-familiar/aplicacion/puertos/alcance-familiar';
 import type { RepositorioVehiculos } from '../puertos/repositorio-vehiculos';
 
 export type DependenciasObtenerVehiculo = Readonly<{
   repositorioVehiculos: RepositorioVehiculos;
-  proveedorIdentidad: ProveedorIdentidad;
+  proveedorIdentidad: ContextoAplicacion;
 }>;
 
 export type EntradaObtenerVehiculo = Readonly<{
@@ -17,7 +17,7 @@ export async function obtenerVehiculo(
   dependencias: DependenciasObtenerVehiculo,
   entrada: EntradaObtenerVehiculo,
 ): Promise<Vehiculo> {
-  const { householdId } = await dependencias.proveedorIdentidad.obtenerContexto();
+  const { householdId } = dependencias.proveedorIdentidad;
   const vehiculo = await dependencias.repositorioVehiculos.buscarPorId(householdId, entrada.vehiculoId);
 
   if (!vehiculo) {

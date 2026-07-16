@@ -1,4 +1,4 @@
-import { crearDependenciasVehiculos } from '../modulos/vehiculos/interfaz/composicion/dependencias-servidor';
+import { crearDependenciasVehiculosPorSolicitud as crearDependenciasVehiculos } from '../composicion/servidor/alcance-familiar-por-solicitud';
 
 export const dynamic = 'force-dynamic';
 

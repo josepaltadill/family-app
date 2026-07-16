@@ -3,7 +3,7 @@ import { crearIdentificador } from '../../../../compartido/dominio/identificador
 import { crearVehiculo } from '../../dominio/vehiculo';
 import type { RepositorioVehiculos } from '../puertos/repositorio-vehiculos';
 import type { UnidadTrabajoVehiculos } from '../puertos/repositorio-eventos-vehiculo';
-import { ProveedorIdentidadTemporal } from '../pruebas/proveedor-identidad-temporal';
+import { ProveedorIdentidadTemporal } from '../pruebas/contexto-familiar-temporal';
 import { registrarEventoVehiculo } from './registrar-evento-vehiculo';
 
 // Contrato de atomicidad evento + kilometraje (tarea 8, diseño §5.4/§14). Este

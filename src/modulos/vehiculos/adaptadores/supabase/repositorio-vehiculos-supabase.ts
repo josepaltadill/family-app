@@ -6,9 +6,9 @@
 import type { Identificador } from '../../../../compartido/dominio/identificador';
 import type { Vehiculo } from '../../dominio/vehiculo';
 import type { RepositorioVehiculos } from '../../aplicacion/puertos/repositorio-vehiculos';
-import type { ClienteSupabaseServidor } from './cliente-supabase-servidor';
+import type { ClienteSupabaseServidor } from '../../../../compartido/infraestructura/supabase/cliente-servidor';
 import { aFilaVehiculo, aVehiculoDesdeFila, type FilaVehiculo } from './mapeadores-supabase';
-import { errorAdaptadorSupabaseDesde } from './errores-adaptador';
+import { errorAdaptadorSupabaseDesde } from '../../../../compartido/infraestructura/supabase/errores-adaptador';
 
 const TABLA = 'mv_vehiculos';
 

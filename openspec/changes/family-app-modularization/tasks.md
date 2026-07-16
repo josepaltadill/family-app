@@ -30,15 +30,15 @@ Chain strategy: feature-branch-chain
 
 ### RED
 
-- [ ] Añadir pruebas de frontera en `src/compartido/pruebas/` o el directorio de tests existente que fallen si `src/nucleo-familiar/**` importa `src/modulos/vehiculos/**`, si un componente cliente importa adaptadores Supabase o si cualquier elemento bajo `src/modulos/vehiculos/**` resuelve identidad. <!-- sdd-owner: implementation -->
-- [ ] Añadir pruebas de composición para sesión ausente, cero membresías, múltiples membresías y contexto único en torno a `src/composicion/servidor/alcance-familiar-por-solicitud.ts`. <!-- sdd-owner: implementation -->
+- [x] Añadir pruebas de frontera en `src/compartido/pruebas/` o el directorio de tests existente que fallen si `src/nucleo-familiar/**` importa `src/modulos/vehiculos/**`, si un componente cliente importa adaptadores Supabase o si cualquier elemento bajo `src/modulos/vehiculos/**` resuelve identidad. <!-- sdd-owner: implementation -->
+- [x] Añadir pruebas de composición para sesión ausente, cero membresías, múltiples membresías y contexto único en torno a `src/composicion/servidor/alcance-familiar-por-solicitud.ts`. <!-- sdd-owner: implementation -->
 
 ### GREEN
 
-- [ ] Crear o mover contratos, roles, `ContextoAplicacion`, `ProveedorIdentidad`, `resolver-acceso-familiar` y errores de acceso a `src/nucleo-familiar/dominio/` y `src/nucleo-familiar/aplicacion/`, preservando el fallo cerrado definido en `specs/app-familiar-core/spec.md`. <!-- sdd-owner: implementation -->
-- [ ] Mover los adaptadores de identidad, bootstrap, preflight y operaciones PostgreSQL a `src/nucleo-familiar/adaptadores/` y actualizar `scripts/bootstrap-admin.ts` sin ampliar la allowlist administrativa. <!-- sdd-owner: implementation -->
-- [ ] Implementar `src/composicion/servidor/alcance-familiar-por-solicitud.ts` como módulo server-only que cree el cliente SSR, resuelva una sola vez el contexto y devuelva un alcance inmutable a vehículos. <!-- sdd-owner: implementation -->
-- [ ] Ajustar `src/modulos/vehiculos/**` y su composición para recibir el alcance familiar mediante un puerto estable, sin consultar membresías ni aceptar un hogar del cliente. <!-- sdd-owner: implementation -->
+- [x] Crear o mover contratos, roles, `ContextoAplicacion`, `ProveedorIdentidad`, `resolver-acceso-familiar` y errores de acceso a `src/nucleo-familiar/dominio/` y `src/nucleo-familiar/aplicacion/`, preservando el fallo cerrado definido en `specs/app-familiar-core/spec.md`. <!-- sdd-owner: implementation -->
+- [x] Mover los adaptadores de identidad, bootstrap, preflight y operaciones PostgreSQL a `src/nucleo-familiar/adaptadores/` y actualizar `scripts/bootstrap-admin.ts` sin ampliar la allowlist administrativa. <!-- sdd-owner: implementation -->
+- [x] Implementar `src/composicion/servidor/alcance-familiar-por-solicitud.ts` como módulo server-only que cree el cliente SSR, resuelva una sola vez el contexto y devuelva un alcance inmutable a vehículos. <!-- sdd-owner: implementation -->
+- [x] Ajustar `src/modulos/vehiculos/**` y su composición para recibir el alcance familiar mediante un puerto estable, sin consultar membresías ni aceptar un hogar del cliente. <!-- sdd-owner: implementation -->
 
 ### TRIANGULATE
 

@@ -80,7 +80,7 @@ describe('contieneClavePrivilegiada', () => {
 describe('detectarImportadorNoPermitidoDeBootstrap', () => {
   it('reporta un archivo fuera de la allowlist que importa operaciones-bootstrap-postgres', () => {
     const contenido =
-      "import { crearOperacionesBootstrapPostgres } from '../modulos/vehiculos/adaptadores/supabase/operaciones-bootstrap-postgres';\n";
+      "import { crearOperacionesBootstrapPostgres } from '../nucleo-familiar/adaptadores/supabase/operaciones-bootstrap-postgres';\n";
 
     expect(detectarImportadorNoPermitidoDeBootstrap('acciones-vehiculos.ts', contenido)).toBe(true);
   });
@@ -93,7 +93,7 @@ describe('detectarImportadorNoPermitidoDeBootstrap', () => {
 
   it('no reporta el runner real (scripts/bootstrap-admin.ts)', () => {
     const contenido =
-      "import { ejecutarBootstrapPostgresDesdeEntorno } from '../src/modulos/vehiculos/adaptadores/supabase/operaciones-bootstrap-postgres';\n";
+      "import { ejecutarBootstrapPostgresDesdeEntorno } from '../src/nucleo-familiar/adaptadores/supabase/operaciones-bootstrap-postgres';\n";
 
     expect(detectarImportadorNoPermitidoDeBootstrap('scripts/bootstrap-admin.ts', contenido)).toBe(false);
   });
@@ -103,7 +103,7 @@ describe('detectarImportadorNoPermitidoDeBootstrap', () => {
 
     expect(
       detectarImportadorNoPermitidoDeBootstrap(
-        'src/modulos/vehiculos/adaptadores/supabase/operaciones-bootstrap-postgres.ts',
+        'src/nucleo-familiar/adaptadores/supabase/operaciones-bootstrap-postgres.ts',
         contenido,
       ),
     ).toBe(false);
@@ -117,7 +117,7 @@ describe('detectarImportadorNoPermitidoDeBootstrap', () => {
 
   it('reporta un import() dinámico de operaciones-bootstrap-postgres fuera de la allowlist', () => {
     const contenido =
-      "const { crearOperacionesBootstrapPostgres } = await import('../modulos/vehiculos/adaptadores/supabase/operaciones-bootstrap-postgres');\n";
+      "const { crearOperacionesBootstrapPostgres } = await import('../nucleo-familiar/adaptadores/supabase/operaciones-bootstrap-postgres');\n";
 
     expect(detectarImportadorNoPermitidoDeBootstrap('accion-indebida.ts', contenido)).toBe(true);
   });

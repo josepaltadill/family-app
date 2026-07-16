@@ -7,14 +7,14 @@ import type {
   RepositorioEventosVehiculo,
   UnidadTrabajoVehiculos,
 } from '../../aplicacion/puertos/repositorio-eventos-vehiculo';
-import type { ClienteSupabaseServidor } from './cliente-supabase-servidor';
+import type { ClienteSupabaseServidor } from '../../../../compartido/infraestructura/supabase/cliente-servidor';
 import {
   aFilaEventoVehiculo,
   aFilaVehiculo,
   aEventoVehiculoDesdeFila,
   type FilaEventoVehiculo,
 } from './mapeadores-supabase';
-import { errorAdaptadorSupabaseDesde } from './errores-adaptador';
+import { errorAdaptadorSupabaseDesde } from '../../../../compartido/infraestructura/supabase/errores-adaptador';
 
 const TABLA_VEHICULOS = 'mv_vehiculos';
 const TABLA_EVENTOS = 'mv_eventos_vehiculo';

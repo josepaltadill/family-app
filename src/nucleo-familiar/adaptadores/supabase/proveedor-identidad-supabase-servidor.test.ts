@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { crearIdentificador } from '../../../../compartido/dominio/identificador';
-import { establecerReportadorIncidentes } from '../../../../compartido/infraestructura/reporte-incidentes';
-import type { ClienteSupabaseSsr } from '../../../../compartido/infraestructura/supabase/cliente-supabase-ssr';
-import type { ProveedorIdentidad } from '../../aplicacion/puertos/proveedor-identidad';
+import { crearIdentificador } from '../../../compartido/dominio/identificador';
+import { establecerReportadorIncidentes } from '../../../compartido/infraestructura/reporte-incidentes';
+import type { ClienteSupabaseSsr } from '../../../compartido/infraestructura/supabase/cliente-supabase-ssr';
+import type { ProveedorIdentidad } from '../../aplicacion/puertos/alcance-familiar';
 import { exigirContextoFamiliar } from '../../aplicacion/servicios/resolver-acceso-familiar';
-import { crearClienteSupabaseFalso } from './pruebas/cliente-supabase-falso';
+import { crearClienteSupabaseFalso } from '../../../modulos/vehiculos/adaptadores/supabase/pruebas/cliente-supabase-falso';
 import { ProveedorIdentidadSupabaseServidor } from './proveedor-identidad-supabase-servidor';
 
 const redirectMock = vi.fn();

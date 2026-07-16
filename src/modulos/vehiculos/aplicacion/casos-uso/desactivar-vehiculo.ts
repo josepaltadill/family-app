@@ -1,12 +1,12 @@
 import type { Identificador } from '../../../../compartido/dominio/identificador';
 import { ErrorDominio } from '../../dominio/errores-dominio';
 import type { ProveedorFecha } from '../puertos/proveedor-fecha';
-import type { ProveedorIdentidad } from '../puertos/proveedor-identidad';
+import type { ContextoAplicacion } from '../../../../nucleo-familiar/aplicacion/puertos/alcance-familiar';
 import type { RepositorioVehiculos } from '../puertos/repositorio-vehiculos';
 
 export type DependenciasDesactivarVehiculo = Readonly<{
   repositorioVehiculos: RepositorioVehiculos;
-  proveedorIdentidad: ProveedorIdentidad;
+  proveedorIdentidad: ContextoAplicacion;
   proveedorFecha: ProveedorFecha;
 }>;
 
@@ -18,7 +18,7 @@ export async function desactivarVehiculo(
   dependencias: DependenciasDesactivarVehiculo,
   entrada: EntradaDesactivarVehiculo,
 ): Promise<void> {
-  const { householdId } = await dependencias.proveedorIdentidad.obtenerContexto();
+  const { householdId } = dependencias.proveedorIdentidad;
   const vehiculo = await dependencias.repositorioVehiculos.buscarPorId(householdId, entrada.vehiculoId);
 
   if (!vehiculo) {

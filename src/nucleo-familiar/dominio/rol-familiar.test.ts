@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { esRolUsuario, rolesUsuario } from './rol-usuario';
+import { esRolUsuario, rolesUsuario } from './rol-familiar';
 
 describe('RolUsuario', () => {
   it('reconoce admin como rol del dominio', () => {

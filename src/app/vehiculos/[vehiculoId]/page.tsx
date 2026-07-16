@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { ErrorDominio } from '@/modulos/vehiculos/dominio/errores-dominio';
 import { listarEventosVehiculo } from '@/modulos/vehiculos/aplicacion/casos-uso/listar-eventos-vehiculo';
 import { obtenerVehiculo } from '@/modulos/vehiculos/aplicacion/casos-uso/obtener-vehiculo';
-import { crearDependenciasVehiculos } from '@/modulos/vehiculos/interfaz/composicion/dependencias-servidor';
+import { crearDependenciasVehiculosPorSolicitud as crearDependenciasVehiculos } from '../../../composicion/servidor/alcance-familiar-por-solicitud';
 import { FormularioCorreccionKilometraje } from '@/modulos/vehiculos/interfaz/componentes/formulario-correccion-kilometraje';
 import { HistorialEventos } from '@/modulos/vehiculos/interfaz/componentes/historial-eventos';
 import { crearIdentificador } from '@/compartido/dominio/identificador';

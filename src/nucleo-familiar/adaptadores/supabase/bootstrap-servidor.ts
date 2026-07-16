@@ -27,8 +27,8 @@
 // re-export vía barrel ni un alias de `tsconfig.json` que renombre el
 // specifier sin conservar el nombre del módulo.
 import 'server-only';
-import { crearIdentificador, type Identificador } from '../../../../compartido/dominio/identificador';
-import type { RolUsuario } from '../../dominio/rol-usuario';
+import { crearIdentificador, type Identificador } from '../../../compartido/dominio/identificador';
+import type { RolUsuario } from '../../dominio/rol-familiar';
 
 export class ErrorRaceBootstrapHogar extends Error {
   constructor(nombre: string, cantidadEncontrada: number) {

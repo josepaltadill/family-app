@@ -107,7 +107,7 @@ export function detectarModulosBootstrapSinServerOnly(archivos: readonly string[
 // distinto que por casualidad comparta nombre base con el runner real no debe
 // quedar permitido solo por eso.
 const IMPORTADORES_PERMITIDOS_DE_BOOTSTRAP = [
-  'src/modulos/vehiculos/adaptadores/supabase/operaciones-bootstrap-postgres.ts', // usa bootstrap-servidor.ts internamente
+  'src/nucleo-familiar/adaptadores/supabase/operaciones-bootstrap-postgres.ts', // usa bootstrap-servidor.ts internamente
   'scripts/bootstrap-admin.ts', // el único runner real (issue #8)
 ];
 

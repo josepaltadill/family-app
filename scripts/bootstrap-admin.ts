@@ -1,9 +1,9 @@
-import { leerSolicitudBootstrap, serializarPlanBootstrap } from '../src/modulos/vehiculos/adaptadores/supabase/bootstrap-cli';
+import { leerSolicitudBootstrap, serializarPlanBootstrap } from '../src/nucleo-familiar/adaptadores/supabase/bootstrap-cli';
 import {
   crearOperacionesBootstrapPostgres,
   ejecutarBootstrapPostgresDesdeEntorno,
   leerOpcionesConexionBootstrapDesdeEntorno,
-} from '../src/modulos/vehiculos/adaptadores/supabase/operaciones-bootstrap-postgres';
+} from '../src/nucleo-familiar/adaptadores/supabase/operaciones-bootstrap-postgres';
 
 async function ejecutarPreflight(solicitud: ReturnType<typeof leerSolicitudBootstrap>): Promise<void> {
   const databaseUrl = process.env.SUPABASE_BOOTSTRAP_DATABASE_URL;

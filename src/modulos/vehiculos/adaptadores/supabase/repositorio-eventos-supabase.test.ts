@@ -4,8 +4,8 @@ import { crearEventoVehiculo } from '../../dominio/evento-vehiculo';
 import { crearVehiculo } from '../../dominio/vehiculo';
 import { crearClienteSupabaseFalso } from './pruebas/cliente-supabase-falso';
 import { RepositorioEventosSupabase } from './repositorio-eventos-supabase';
-import { ErrorAdaptadorSupabase } from './errores-adaptador';
-import type { ClienteSupabaseServidor } from './cliente-supabase-servidor';
+import { ErrorAdaptadorSupabase } from '../../../../compartido/infraestructura/supabase/errores-adaptador';
+import type { ClienteSupabaseServidor } from '../../../../compartido/infraestructura/supabase/cliente-servidor';
 
 const householdId = crearIdentificador('11111111-1111-4111-8111-111111111111');
 const vehiculoId = crearIdentificador('22222222-2222-4222-8222-222222222222');

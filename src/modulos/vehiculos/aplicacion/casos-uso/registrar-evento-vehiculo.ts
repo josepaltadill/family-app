@@ -1,14 +1,14 @@
 import { crearEventoVehiculo, type DatosCrearEventoVehiculo, type EventoVehiculo } from '../../dominio/evento-vehiculo';
 import { ErrorDominio } from '../../dominio/errores-dominio';
 import type { ProveedorFecha } from '../puertos/proveedor-fecha';
-import type { ProveedorIdentidad } from '../puertos/proveedor-identidad';
+import type { ContextoAplicacion } from '../../../../nucleo-familiar/aplicacion/puertos/alcance-familiar';
 import type { UnidadTrabajoVehiculos } from '../puertos/repositorio-eventos-vehiculo';
 import type { RepositorioVehiculos } from '../puertos/repositorio-vehiculos';
 
 export type DependenciasRegistrarEventoVehiculo = Readonly<{
   repositorioVehiculos: RepositorioVehiculos;
   unidadTrabajoVehiculos: UnidadTrabajoVehiculos;
-  proveedorIdentidad: ProveedorIdentidad;
+  proveedorIdentidad: ContextoAplicacion;
   proveedorFecha: ProveedorFecha;
 }>;
 
@@ -18,7 +18,7 @@ export async function registrarEventoVehiculo(
   dependencias: DependenciasRegistrarEventoVehiculo,
   entrada: EntradaRegistrarEventoVehiculo,
 ): Promise<EventoVehiculo> {
-  const { householdId } = await dependencias.proveedorIdentidad.obtenerContexto();
+  const { householdId } = dependencias.proveedorIdentidad;
   const vehiculo = await dependencias.repositorioVehiculos.buscarPorId(householdId, entrada.vehiculoId);
 
   if (!vehiculo) {

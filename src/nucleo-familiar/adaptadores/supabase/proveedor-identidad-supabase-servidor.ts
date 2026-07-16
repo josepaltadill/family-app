@@ -1,8 +1,8 @@
-import { crearIdentificador } from '../../../../compartido/dominio/identificador';
-import { reportarIncidente } from '../../../../compartido/infraestructura/reporte-incidentes';
-import type { ClienteSupabaseSsr } from '../../../../compartido/infraestructura/supabase/cliente-supabase-ssr';
-import type { AccesoFamiliar, ContextoAplicacion, ProveedorIdentidad } from '../../aplicacion/puertos/proveedor-identidad';
-import { esRolUsuario } from '../../dominio/rol-usuario';
+import { crearIdentificador } from '../../../compartido/dominio/identificador';
+import { reportarIncidente } from '../../../compartido/infraestructura/reporte-incidentes';
+import type { ClienteSupabaseSsr } from '../../../compartido/infraestructura/supabase/cliente-supabase-ssr';
+import type { AccesoFamiliar, ContextoAplicacion, ProveedorIdentidad } from '../../aplicacion/puertos/alcance-familiar';
+import { esRolUsuario } from '../../dominio/rol-familiar';
 
 const PATRON_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type FilaMembresia = Readonly<{ household_id: string; rol: string }>;

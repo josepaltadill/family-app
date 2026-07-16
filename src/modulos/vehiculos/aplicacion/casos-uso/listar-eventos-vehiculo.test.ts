@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { crearIdentificador } from '../../../../compartido/dominio/identificador';
 import { crearEventoVehiculo } from '../../dominio/evento-vehiculo';
-import { ProveedorIdentidadTemporal } from '../pruebas/proveedor-identidad-temporal';
+import { ProveedorIdentidadTemporal } from '../pruebas/contexto-familiar-temporal';
 import { RepositorioEventosVehiculoEnMemoria } from '../pruebas/repositorio-eventos-vehiculo-en-memoria';
 import { listarEventosVehiculo } from './listar-eventos-vehiculo';
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { EntornoSupabase } from '../../../../compartido/infraestructura/entorno';
+import type { EntornoSupabase } from '../entorno';
 import { ErrorAdaptadorSupabase } from './errores-adaptador';
 
 const signInWithPassword = vi.fn();
@@ -28,7 +28,7 @@ describe('crearClienteSupabaseServidor', () => {
 
   it('lanza un error de frontera de servidor si se ejecuta con `window` definido (contexto navegador)', async () => {
     vi.stubGlobal('window', {});
-    const { crearClienteSupabaseServidor } = await import('./cliente-supabase-servidor');
+    const { crearClienteSupabaseServidor } = await import('./cliente-servidor');
 
     await expect(crearClienteSupabaseServidor(entornoValido)).rejects.toThrow(
       'crearClienteSupabaseServidor solo puede ejecutarse en servidor',
@@ -38,7 +38,7 @@ describe('crearClienteSupabaseServidor', () => {
 
   it('crea el cliente con la URL/clave anónima y autentica al usuario de servidor sembrado', async () => {
     signInWithPassword.mockResolvedValue({ error: null });
-    const { crearClienteSupabaseServidor } = await import('./cliente-supabase-servidor');
+    const { crearClienteSupabaseServidor } = await import('./cliente-servidor');
 
     await crearClienteSupabaseServidor(entornoValido);
 
@@ -55,7 +55,7 @@ describe('crearClienteSupabaseServidor', () => {
 
   it('propaga un error descriptivo si falla la autenticación del usuario sembrado', async () => {
     signInWithPassword.mockResolvedValue({ error: { message: 'credenciales inválidas' } });
-    const { crearClienteSupabaseServidor } = await import('./cliente-supabase-servidor');
+    const { crearClienteSupabaseServidor } = await import('./cliente-servidor');
 
     await expect(crearClienteSupabaseServidor(entornoValido)).rejects.toThrow(
       'No se pudo autenticar el usuario de servidor sembrado: credenciales inválidas',
@@ -64,7 +64,7 @@ describe('crearClienteSupabaseServidor', () => {
 
   it('propaga ErrorAdaptadorSupabase con el código Postgres/GoTrue cuando falla la autenticación', async () => {
     signInWithPassword.mockResolvedValue({ error: { message: 'credenciales inválidas', code: 'invalid_credentials' } });
-    const { crearClienteSupabaseServidor } = await import('./cliente-supabase-servidor');
+    const { crearClienteSupabaseServidor } = await import('./cliente-servidor');
 
     let errorCapturado: unknown;
     try {

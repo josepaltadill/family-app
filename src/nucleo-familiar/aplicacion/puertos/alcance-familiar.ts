@@ -1,5 +1,5 @@
-import type { Identificador } from '../../../../compartido/dominio/identificador';
-import type { RolUsuario } from '../../dominio/rol-usuario';
+import type { Identificador } from '../../../compartido/dominio/identificador';
+import type { RolUsuario } from '../../dominio/rol-familiar';
 
 export type ActorAplicacion = Readonly<{
   id: Identificador;

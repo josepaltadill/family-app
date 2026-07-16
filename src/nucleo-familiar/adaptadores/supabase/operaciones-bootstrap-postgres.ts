@@ -1,5 +1,5 @@
 import 'server-only';
-import { esRolUsuario, type RolUsuario } from '../../dominio/rol-usuario';
+import { esRolUsuario, type RolUsuario } from '../../dominio/rol-familiar';
 import {
   sembrarHogarDeDesarrollo,
   type EntradaBootstrap,

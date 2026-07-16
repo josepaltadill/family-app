@@ -1,11 +1,11 @@
 import type { Identificador } from '../../../../compartido/dominio/identificador';
 import { ErrorDominio } from '../../dominio/errores-dominio';
-import type { ProveedorIdentidad } from '../puertos/proveedor-identidad';
+import type { ContextoAplicacion } from '../../../../nucleo-familiar/aplicacion/puertos/alcance-familiar';
 import type { RepositorioVehiculos } from '../puertos/repositorio-vehiculos';
 
 export type DependenciasCorregirKilometraje = Readonly<{
   repositorioVehiculos: RepositorioVehiculos;
-  proveedorIdentidad: ProveedorIdentidad;
+  proveedorIdentidad: ContextoAplicacion;
 }>;
 
 export type EntradaCorregirKilometraje = Readonly<{
@@ -17,7 +17,7 @@ export async function corregirKilometraje(
   dependencias: DependenciasCorregirKilometraje,
   entrada: EntradaCorregirKilometraje,
 ): Promise<void> {
-  const { householdId } = await dependencias.proveedorIdentidad.obtenerContexto();
+  const { householdId } = dependencias.proveedorIdentidad;
   const vehiculo = await dependencias.repositorioVehiculos.buscarPorId(householdId, entrada.vehiculoId);
 
   if (!vehiculo) {

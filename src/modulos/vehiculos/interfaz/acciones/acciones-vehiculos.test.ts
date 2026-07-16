@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { crearIdentificador } from '../../../../compartido/dominio/identificador';
-import { ProveedorIdentidadTemporal } from '../../aplicacion/pruebas/proveedor-identidad-temporal';
+import { ProveedorIdentidadTemporal } from '../../aplicacion/pruebas/contexto-familiar-temporal';
 import { RepositorioVehiculosEnMemoria } from '../../aplicacion/pruebas/repositorio-vehiculos-en-memoria';
 
 const revalidatePathMock = vi.fn();
@@ -9,8 +9,8 @@ const crearDependenciasVehiculosMock = vi.fn();
 
 vi.mock('next/cache', () => ({ revalidatePath: (...args: unknown[]) => revalidatePathMock(...args) }));
 vi.mock('next/navigation', () => ({ redirect: (...args: unknown[]) => redirectMock(...args) }));
-vi.mock('../composicion/dependencias-servidor', () => ({
-  crearDependenciasVehiculos: (...args: unknown[]) => crearDependenciasVehiculosMock(...args),
+vi.mock('../../../../composicion/servidor/alcance-familiar-por-solicitud', () => ({
+  crearDependenciasVehiculosPorSolicitud: (...args: unknown[]) => crearDependenciasVehiculosMock(...args),
 }));
 
 const {

@@ -19,7 +19,7 @@ vi.mock('../../../../compartido/infraestructura/entorno', () => ({
 vi.mock('../../../../compartido/infraestructura/supabase/cliente-supabase-ssr', () => ({
   crearClienteSupabaseSsrPorSolicitud: vi.fn(() => mocks.cliente),
 }));
-vi.mock('../../adaptadores/supabase/proveedor-identidad-supabase-servidor', () => ({
+vi.mock('../../../../nucleo-familiar/adaptadores/supabase/proveedor-identidad-supabase-servidor', () => ({
   ProveedorIdentidadSupabaseServidor: class { resolverAcceso = mocks.resolverAcceso; },
 }));
 vi.mock('../../adaptadores/supabase/repositorio-vehiculos-supabase', () => ({
@@ -36,7 +36,7 @@ import PaginaNuevoEvento from '../../../../app/vehiculos/[vehiculoId]/eventos/nu
 import PaginaNuevoVehiculo from '../../../../app/vehiculos/nuevo/page';
 import { crearClienteSupabaseSsrPorSolicitud } from '../../../../compartido/infraestructura/supabase/cliente-supabase-ssr';
 import { listarVehiculos } from '../../aplicacion/casos-uso/listar-vehiculos';
-import { crearDependenciasVehiculos } from './dependencias-servidor';
+import { crearDependenciasVehiculosPorSolicitud as crearDependenciasVehiculos } from '../../../../composicion/servidor/alcance-familiar-por-solicitud';
 const ENTORNO = { url: 'https://ejemplo.supabase.co', anonKey: 'anon' };
 const PAGINAS_PROTEGIDAS = [
   ['inicio', () => PaginaInicio()],
@@ -51,9 +51,8 @@ describe('crearDependenciasVehiculos', () => {
   });
 
   it('reutiliza una única resolución y contexto durante la solicitud', async () => {
-    const dependencias = await crearDependenciasVehiculos(ENTORNO);
+    const dependencias = await crearDependenciasVehiculos();
     await listarVehiculos(dependencias);
-    await dependencias.proveedorIdentidad.obtenerContexto();
     expect(crearClienteSupabaseSsrPorSolicitud).toHaveBeenCalledOnce();
     expect(mocks.resolverAcceso).toHaveBeenCalledOnce();
     expect(mocks.listar).toHaveBeenCalledWith(CONTEXTO.householdId);
@@ -64,14 +63,14 @@ describe('crearDependenciasVehiculos', () => {
     [{ estado: 'sin-acceso', motivo: 'sin-membresia' } as const, '/acceso-no-disponible'],
   ])('redirige el acceso denegado antes de construir o consultar repositorios', async (acceso, destino) => {
     mocks.resolverAcceso.mockResolvedValue(acceso);
-    await expect(crearDependenciasVehiculos(ENTORNO)).rejects.toThrow(`redirect:${destino}`);
+    await expect(crearDependenciasVehiculos()).rejects.toThrow(`redirect:${destino}`);
     expect(mocks.crearVehiculos).not.toHaveBeenCalled();
     expect(mocks.crearEventos).not.toHaveBeenCalled();
     expect(mocks.listar).not.toHaveBeenCalled();
   });
 
   it('ignora autoridad manipulada y conserva el contexto del servidor', async () => {
-    const dependencias = await crearDependenciasVehiculos(ENTORNO);
+    const dependencias = await crearDependenciasVehiculos();
     const dependenciasManipuladas = { ...dependencias,
       householdId: { valor: '99999999-9999-4999-8999-999999999999' },
       actor: { id: { valor: '99999999-9999-4999-8999-999999999999' }, rol: 'admin' },

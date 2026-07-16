@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { listarVehiculos } from '@/modulos/vehiculos/aplicacion/casos-uso/listar-vehiculos';
-import { crearDependenciasVehiculos } from '@/modulos/vehiculos/interfaz/composicion/dependencias-servidor';
+import { crearDependenciasVehiculosPorSolicitud as crearDependenciasVehiculos } from '../../composicion/servidor/alcance-familiar-por-solicitud';
 import { ListaVehiculos } from '@/modulos/vehiculos/interfaz/componentes/lista-vehiculos';
 import { aVehiculoVista } from '@/modulos/vehiculos/interfaz/vistas/vehiculo-vista';
 

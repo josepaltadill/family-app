@@ -7,7 +7,7 @@
 // Este módulo NUNCA debe importarse desde componentes cliente ni desde código que
 // se ejecute en el navegador. La guarda `asegurarEjecucionServidor` lo impide en runtime.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { leerEntornoSupabase, type EntornoSupabase } from '../../../../compartido/infraestructura/entorno';
+import { leerEntornoSupabase, type EntornoSupabase } from '../entorno';
 import { errorAdaptadorSupabaseDesde } from './errores-adaptador';
 
 export type ClienteSupabaseServidor = SupabaseClient;

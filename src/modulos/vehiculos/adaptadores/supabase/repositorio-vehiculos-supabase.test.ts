@@ -3,8 +3,8 @@ import { crearIdentificador } from '../../../../compartido/dominio/identificador
 import { crearVehiculo } from '../../dominio/vehiculo';
 import { crearClienteSupabaseFalso } from './pruebas/cliente-supabase-falso';
 import { RepositorioVehiculosSupabase } from './repositorio-vehiculos-supabase';
-import { ErrorAdaptadorSupabase } from './errores-adaptador';
-import type { ClienteSupabaseServidor } from './cliente-supabase-servidor';
+import { ErrorAdaptadorSupabase } from '../../../../compartido/infraestructura/supabase/errores-adaptador';
+import type { ClienteSupabaseServidor } from '../../../../compartido/infraestructura/supabase/cliente-servidor';
 
 const householdId = crearIdentificador('11111111-1111-4111-8111-111111111111');
 const otroHouseholdId = crearIdentificador('99999999-9999-4999-8999-999999999999');

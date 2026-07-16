@@ -7,7 +7,7 @@ import { desactivarVehiculo } from './desactivar-vehiculo';
 import { listarVehiculos } from './listar-vehiculos';
 import { registrarEventoVehiculo } from './registrar-evento-vehiculo';
 import { registrarVehiculo } from './registrar-vehiculo';
-import { ProveedorIdentidadTemporal } from '../pruebas/proveedor-identidad-temporal';
+import { ProveedorIdentidadTemporal } from '../pruebas/contexto-familiar-temporal';
 import { RepositorioEventosVehiculoEnMemoria } from '../pruebas/repositorio-eventos-vehiculo-en-memoria';
 import { RepositorioVehiculosEnMemoria } from '../pruebas/repositorio-vehiculos-en-memoria';
 const fecha = (iso: string) => new Date(iso);

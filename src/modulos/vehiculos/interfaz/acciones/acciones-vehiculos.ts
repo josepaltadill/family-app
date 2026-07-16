@@ -11,7 +11,7 @@ import { crearIdentificador } from '../../../../compartido/dominio/identificador
 import { desactivarVehiculo, type DependenciasDesactivarVehiculo } from '../../aplicacion/casos-uso/desactivar-vehiculo';
 import { registrarVehiculo, type DependenciasRegistrarVehiculo } from '../../aplicacion/casos-uso/registrar-vehiculo';
 import type { ProveedorFecha } from '../../aplicacion/puertos/proveedor-fecha';
-import { crearDependenciasVehiculos } from '../composicion/dependencias-servidor';
+import { crearDependenciasVehiculosPorSolicitud as crearDependenciasVehiculos } from '../../../../composicion/servidor/alcance-familiar-por-solicitud';
 import { esquemaRegistrarVehiculo } from '../validacion/esquemas-vehiculo';
 import { aVehiculoVista, type VehiculoVista } from '../vistas/vehiculo-vista';
 import { ejecutarComoResultado, type ResultadoAccion } from './resultado-accion';

@@ -15,7 +15,7 @@ import {
   registrarEventoVehiculo,
   type DependenciasRegistrarEventoVehiculo,
 } from '../../aplicacion/casos-uso/registrar-evento-vehiculo';
-import { crearDependenciasVehiculos } from '../composicion/dependencias-servidor';
+import { crearDependenciasVehiculosPorSolicitud as crearDependenciasVehiculos } from '../../../../composicion/servidor/alcance-familiar-por-solicitud';
 import { esquemaCorregirKilometraje } from '../validacion/esquemas-vehiculo';
 import { esquemaRegistrarEvento } from '../validacion/esquemas-evento';
 import { ejecutarComoResultado, type ResultadoAccion } from './resultado-accion';

@@ -1,5 +1,5 @@
 import { reportarIncidente } from '../../../../compartido/infraestructura/reporte-incidentes';
-import { ErrorAdaptadorSupabase } from '../../adaptadores/supabase/errores-adaptador';
+import { ErrorAdaptadorSupabase } from '../../../../compartido/infraestructura/supabase/errores-adaptador';
 import { ErrorDominio } from '../../dominio/errores-dominio';
 
 export type ResultadoAccion<T> =

@@ -5,7 +5,7 @@ import {
   sembrarHogarDeDesarrollo,
   type OperacionesBootstrap,
 } from './bootstrap-servidor';
-import type { RolUsuario } from '../../dominio/rol-usuario';
+import type { RolUsuario } from '../../dominio/rol-familiar';
 
 const entornoBootstrap = {
   bootstrapEmail: 'admin-desarrollo@ejemplo.local',
