@@ -5,7 +5,7 @@ import { describirHarnessPruebas } from './harness';
 describe('harness de pruebas', () => {
   it('describe el runner configurado para el proyecto', () => {
     expect(describirHarnessPruebas()).toEqual({
-      proyecto: 'manteniment-vehicles',
+      proyecto: 'family-app',
       runner: 'vitest',
       estado: 'configurado',
     });

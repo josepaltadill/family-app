@@ -1,12 +1,12 @@
 export type DescripcionHarnessPruebas = {
-  proyecto: 'manteniment-vehicles';
+  proyecto: 'family-app';
   runner: 'vitest';
   estado: 'configurado';
 };
 
 export function describirHarnessPruebas(): DescripcionHarnessPruebas {
   return {
-    proyecto: 'manteniment-vehicles',
+    proyecto: 'family-app',
     runner: 'vitest',
     estado: 'configurado',
   };
