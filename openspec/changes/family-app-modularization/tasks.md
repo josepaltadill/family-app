@@ -84,22 +84,22 @@ Chain strategy: feature-branch-chain
 
 ### RED
 
-- [ ] Cambiar primero las expectativas de tablas en tests de `src/modulos/vehiculos/**`, `src/nucleo-familiar/**`, `src/compartido/pruebas/**`, `scripts/` y `supabase/validation/` para que fallen contra `mv_*` y exijan `fam_*`. <!-- sdd-owner: implementation -->
+- [x] Cambiar primero las expectativas de tablas en tests de `src/modulos/vehiculos/**`, `src/nucleo-familiar/**`, `src/compartido/pruebas/**`, `scripts/` y `supabase/validation/` para que fallen contra `mv_*` y exijan `fam_*`. <!-- sdd-owner: implementation -->
 - [ ] Añadir pruebas de integración de repositorios para matrícula única por hogar incluyendo inactivos, FK compuesta, eventos cruzados, kilometraje, baja lógica, coste, año, fechas, estados, valores negativos/límite y vencimientos usando `fam_ve_*` con reloj/zonahoraria inyectados. <!-- sdd-owner: implementation -->
 
 ### GREEN
 
-- [ ] Actualizar `ProveedorIdentidadSupabaseServidor` y consultas de membresías a `fam_miembros_hogar`, manteniendo `auth.getUser()`, cardinalidad única y errores controlados. <!-- sdd-owner: implementation -->
-- [ ] Actualizar repositorios y mapeadores bajo `src/modulos/vehiculos/adaptadores/supabase/` a `fam_ve_vehiculos` y `fam_ve_eventos_vehiculo`, sin cambiar reglas del dominio. <!-- sdd-owner: implementation -->
-- [ ] Actualizar `bootstrap-preflight.ts`, `OperacionesBootstrapPostgres`, runner y pruebas de `scripts/bootstrap-admin.ts` a `fam_hogares`, `fam_miembros_hogar` y `fam_roles_plataforma`, manteniendo idempotencia y abortos ante conflicto. <!-- sdd-owner: implementation -->
-- [ ] Actualizar fixtures, cleanup, smoke tests y `scripts/validate-supabase-rls.sh` para el contrato final, con allowlist mínima y explícita para migraciones/historiales no productivos. <!-- sdd-owner: implementation -->
+- [x] Actualizar `ProveedorIdentidadSupabaseServidor` y consultas de membresías a `fam_miembros_hogar`, manteniendo `auth.getUser()`, cardinalidad única y errores controlados. <!-- sdd-owner: implementation -->
+- [x] Actualizar repositorios y mapeadores bajo `src/modulos/vehiculos/adaptadores/supabase/` a `fam_ve_vehiculos` y `fam_ve_eventos_vehiculo`, sin cambiar reglas del dominio. <!-- sdd-owner: implementation -->
+- [x] Actualizar `bootstrap-preflight.ts`, `OperacionesBootstrapPostgres`, runner y pruebas de `scripts/bootstrap-admin.ts` a `fam_hogares`, `fam_miembros_hogar` y `fam_roles_plataforma`, manteniendo idempotencia y abortos ante conflicto. <!-- sdd-owner: implementation -->
+- [x] Actualizar fixtures, cleanup, smoke tests y `scripts/validate-supabase-rls.sh` para el contrato final, con allowlist mínima y explícita para migraciones/historiales no productivos. <!-- sdd-owner: implementation -->
 
 ### TRIANGULATE
 
-- [ ] Ejecutar `npm test` y la matriz RLS para anónimo, no miembro, `editor`, `admin`, rol de plataforma, acceso cruzado y operaciones de vehículos; incluir prueba concurrente del último administrador. <!-- sdd-owner: implementation -->
-- [ ] Verificar bootstrap repetido, identidad ambigua, membresía duplicada, cero/múltiples membresías, UUID inválido y que ningún runtime ordinario obtiene credenciales `service_role`. <!-- sdd-owner: implementation -->
+- [x] Ejecutar `npm test` y la matriz RLS para anónimo, no miembro, `editor`, `admin`, rol de plataforma, acceso cruzado y operaciones de vehículos; incluir prueba concurrente del último administrador. <!-- sdd-owner: implementation -->
+- [x] Verificar bootstrap repetido, identidad ambigua, membresía duplicada, cero/múltiples membresías, UUID inválido y que ningún runtime ordinario obtiene credenciales `service_role`. <!-- sdd-owner: implementation -->
 - [ ] Ejecutar smoke end-to-end de alta, listado, desactivación, eventos, costes, kilometraje y vencimientos; comprobar que los datos históricos permanecen accesibles. <!-- sdd-owner: implementation -->
-- [ ] Ejecutar búsqueda final en código, configuración activa, scripts, validaciones y catálogo para demostrar que no quedan referencias productivas finales a `mv_*`. <!-- sdd-owner: implementation -->
+- [x] Ejecutar búsqueda final en código, configuración activa, scripts, validaciones y catálogo para demostrar que no quedan referencias productivas finales a `mv_*`. <!-- sdd-owner: implementation -->
 
 ### REFACTOR
 
