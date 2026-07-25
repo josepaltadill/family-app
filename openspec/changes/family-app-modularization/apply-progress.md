@@ -686,3 +686,65 @@ Final reconciliation: tracked `+60/-1` plus untracked `+235/-0` is **+295/-1 = 2
 ## Correction `review-e7483c5e1681ac97` — catalog-derived consumers
 
 `RELIABILITY-001`: the combined preflight now reconciles normal external `mv_*` dependencies from the PR 2C-1 catalog inventory with explicit caller classifications; undeclared dependencies fail closed while internal dependencies remain allowed. RED observed 1/14 failing because an undeclared catalog consumer was accepted; GREEN passed 14/14; focused catalog/operational triangulation passed 17/17. Full `npm test` passed 394 tests with 22 skipped, and `npx tsc --noEmit --incremental false` passed. `RELIABILITY-002` remains an informational PostgreSQL-integration follow-up.
+
+---
+
+## PR 2 — rollback/fix-forward recovery boundary
+
+```yaml
+schemaName: gentle-ai.sdd-status
+changeName: family-app-modularization
+artifactStore: both
+applyState: ready
+actionContext: { mode: repo-local, workspaceRoot: /home/josep/proyectos/family-app, allowedEditRoots: [/home/josep/proyectos/family-app] }
+nextRecommended: apply
+warnings:
+  - PR 2 and PR 3 remain a coordinated activation only.
+  - No dedicated loopback database URL was supplied; this work unit uses non-destructive policy tests only.
+```
+
+### Completed implementation task and persisted checkbox
+- [x] Añadir casos de rollback/fix-forward que documenten el punto de no retorno y comprueben que la recuperación no borra, reasigna ni abre permisos inciertos. <!-- sdd-owner: implementation -->
+
+`tasks.md` was updated immediately and reread: the exact row is visibly `[x]`. Parent-owned rows remain unchanged.
+
+### TDD Cycle Evidence
+| Stage | Evidence |
+|---|---|
+| Safety net | `migracion-family-app-modularization.test.ts` passed 18/18; 2 PostgreSQL cases skipped without an explicitly authorized loopback URL. |
+| RED | New recovery-contract test failed because `recuperacion-corte-family-app` did not exist. |
+| GREEN | Added a pure recovery decision contract; focused recovery test passed 3/3. |
+| TRIANGULATE | Migration source-contract plus recovery tests passed 21/21 with 2 database cases skipped. It distinguishes before the first accepted `fam_*` write from after it, and uncertain RLS from verified RLS. |
+| REFACTOR | Kept recovery as a pure fail-closed decision: it performs no SQL, deletion, reassignment, or access reopening. |
+
+### Files and verification
+- `supabase/validation/recuperacion-corte-family-app.ts`: documents the point of no return as the first accepted `fam_*` write after commit; chooses controlled rollback before it and fix-forward after it; always closes access and prohibits deletion/reassignment.
+- `src/compartido/pruebas/recuperacion-corte-family-app.test.ts`: covers both recovery branches, immutable prohibited operations, and unverified RLS.
+- `npm test` — 51 files passed, 3 skipped; 397 passed, 22 skipped.
+- `npx tsc --noEmit --incremental false` and `git diff --check` — passed.
+
+No design deviation. This isolated PR 2 slice does not execute a database operation, change migration SQL, runtime consumers, shared Supabase, deployment, commit, push, or PR. The remaining unchecked PR 2–4 implementation rows and deferred parent lifecycle actions recorded above remain unchanged.
+
+---
+
+## Gatekeeper correction — executable recovery-state harness
+
+The prior completion claim was reopened before corrective code because its label-only assertions were insufficient. The exact task row was changed back to `[ ]`, then restored to `[x]` only after the executable deterministic model below passed.
+
+### Gate findings addressed
+- **Rows and relationships:** `recuperacion-corte-family-app.test.ts` builds `estadoInicial` with household, member, vehicle and vehicle-event relationship rows (lines 9–15). Both controlled rollback and fix-forward call `aplicarRecuperacionCorteFamiliar`, snapshot the input, and compare the complete pre/post state (lines 38–64).
+- **Owner, grants, policies and RLS:** the same state models `propietario`, `grants`, `politicasRls`, and `rlsHabilitado` (lines 16–21); the rollback assertion compares the full security structure before and after (lines 49–50).
+- **No declarative-only protection:** `aplicarRecuperacionCorteFamiliar` executes a deterministic recovery action by copying state without destructive/reassignment operations; it returns the resulting state for the exact comparison (`recuperacion-corte-family-app.ts`, lines 71–88).
+- **Conditional reopening:** access opens only when `rlsVerificado`, `relacionesVerificadas`, and `consumidoresVerificados` are all true (lines 76–80). The three negative cases prove fail-closed access and unchanged state for each missing verification (test lines 68–82).
+
+### TDD Cycle Evidence
+| Stage | Evidence |
+|---|---|
+| RED | Expanded harness expectations failed 5/6: `aplicarRecuperacionCorteFamiliar` was absent. |
+| GREEN | Implemented the deterministic in-memory recovery action; focused test passed 6/6. |
+| TRIANGULATE | Migration source-contract plus recovery tests passed 24/24, 2 PostgreSQL cases skipped without a supplied authorized loopback URL. Full `npm test` passed 400 tests, 22 skipped. |
+| REFACTOR | Added snapshots so the test proves both input immutability and complete post-action equality. |
+
+The in-memory harness is intentionally non-destructive and does not require a database target. `npx tsc --noEmit --incremental false` and `git diff --check` passed. No shared/remote database, migration SQL, runtime consumer, activation, commit, push, or PR changed. Remaining unchecked implementation and parent-owned rows remain unchanged.
+Correction `review-34e3a05ae728c4ea`: injected rollback/fix-forward actions now execute and return observed state; access derives only from post-action migration, RLS, exact preservation, and required-consumer evidence. `npx vitest run src/compartido/pruebas/recuperacion-corte-family-app.test.ts` — RED 10 failed/2 passed; final 12/12.
+Observed validation: `npm test` — 51 files passed, 3 skipped; 406 passed, 22 skipped. `npx tsc --noEmit --incremental false` passed. Final focused test and `git diff --check` are recorded after reconciliation.
