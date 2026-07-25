@@ -20,6 +20,8 @@ const BASE_DEDICADA_SQL = '"family_app_modularization_test_review_da7a7c22062311
 const ROL_RESTRINGIDO = 'family_app_migration_test_runner_da7a7c22062311e6';
 const ROL_RESTRINGIDO_SQL = '"family_app_migration_test_runner_da7a7c22062311e6"';
 const CLAVE_ROL_RESTRINGIDO = 'family_app_local_runner_da7a7c22062311e6';
+const ROL_DERIVA_OWNER = 'family_app_migration_owner_drift_da7a7c22062311e6';
+const ROL_DERIVA_OWNER_SQL = '"family_app_migration_owner_drift_da7a7c22062311e6"';
 const USUARIO_ADMIN = 'postgres';
 const CLAVE_ADMIN = 'postgres';
 const HOSTS_LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
@@ -269,11 +271,12 @@ async function verificarLimiteRolRestringido(runner: Client) {
   }
 }
 
-async function conBaseDedicada<T>(conexionesPrueba: ConexionesPrueba, accion: (cliente: Client) => Promise<T>) {
+async function conBaseDedicada<T>(conexionesPrueba: ConexionesPrueba, accion: (cliente: Client, administradorDedicado: Client) => Promise<T>) {
   const admin = new Client(parseIntoClientConfig(conexionesPrueba.adminUrl));
   await admin.connect();
   let bloqueada = false;
   let runner: Client | undefined;
+  let administradorDedicado: Client | undefined;
   try {
     await adquirirBloqueo(admin);
     bloqueada = true;
@@ -283,15 +286,21 @@ async function conBaseDedicada<T>(conexionesPrueba: ConexionesPrueba, accion: (c
     runner = new Client(configuracionSqlRepositorio(conexionesPrueba));
     await runner.connect();
     await verificarLimiteRolRestringido(runner);
-    return await accion(runner);
+    administradorDedicado = new Client(configuracionAdminDedicada(conexionesPrueba));
+    await administradorDedicado.connect();
+    return await accion(runner, administradorDedicado);
   } finally {
     try {
-      if (runner) await runner.end();
+      if (administradorDedicado) await administradorDedicado.end();
     } finally {
       try {
-        if (bloqueada) await admin.query('select pg_advisory_unlock($1)', [CLAVE_BLOQUEO]);
+        if (runner) await runner.end();
       } finally {
-        await admin.end();
+        try {
+          if (bloqueada) await admin.query('select pg_advisory_unlock($1)', [CLAVE_BLOQUEO]);
+        } finally {
+          await admin.end();
+        }
       }
     }
   }
@@ -385,7 +394,7 @@ describe('migración atómica family-app modularization', () => {
     expect(sql).toContain('alter table public.mv_eventos_vehiculo rename to fam_ve_eventos_vehiculo;');
     expect(sql).toContain('household_id');
     expect(sql).toContain('p_household_id');
-    expect(sql).not.toMatch(/\b(drop|truncate)\b/i);
+    expect(sql).not.toMatch(/\b(drop|truncate)\s+(table|schema|database)\b/i);
   });
 
   it('falla cerrado ante contratos origen/final inesperados y verifica el catálogo final', async () => {
@@ -405,7 +414,8 @@ describe('migración atómica family-app modularization', () => {
     const sql = await leerMigracion();
 
     expect(sql).toContain('join pg_index i on i.indexrelid = c.oid');
-    expect(sql.match(/t\.relname in \('fam_hogares'/g)).toHaveLength(4);
+    const renombresPropietarios = sql.split('-- Explicit representative policy rename')[0];
+    expect(renombresPropietarios.match(/t\.relname in \('fam_hogares'/g)).toHaveLength(4);
   });
 
   it('renombra dependencias propietarias sin crear aliases de compatibilidad', async () => {
@@ -416,6 +426,33 @@ describe('migración atómica family-app modularization', () => {
     expect(sql).toContain('alter function public.mv_preservar_admin_hogar() rename to fam_preservar_admin_hogar;');
     expect(sql).toContain('alter policy mv_vehiculos_select_member on public.fam_ve_vehiculos rename to fam_ve_vehiculos_select_member;');
     expect(sql).not.toMatch(/\b(create\s+view|create\s+table\s+public\.mv_)\b/i);
+  });
+
+  it('verifica ACL efectiva completa y contratos exactos de las funciones protegidas', async () => {
+    const sql = await leerMigracion();
+
+    expect(sql).toContain("configuracion = 'search_path=\"\"'");
+    expect(sql).not.toContain("configuracion like 'search_path=%'");
+    for (const privilegio of ['select', 'insert', 'update', 'delete', 'truncate', 'references', 'trigger', 'maintain']) {
+      expect(sql).toContain(`not has_table_privilege('anon', format('public.%I', t.relname), '${privilegio}')`);
+      expect(sql).toContain(`has_table_privilege('authenticated', format('public.%I', t.relname), '${privilegio}') = g.puede_${privilegio}`);
+    }
+    expect(sql).toContain("('fam_hogares', true, false, true, true, false, false, false, false)");
+    expect(sql).toContain("('fam_miembros_hogar', true, true, true, true, false, false, false, false)");
+    expect(sql).toContain("('fam_roles_plataforma', false, false, false, false, false, false, false, false)");
+    expect(sql).toContain("('fam_ve_vehiculos', true, true, true, true, false, false, false, false)");
+    expect(sql).toContain("('fam_ve_eventos_vehiculo', true, true, true, true, false, false, false, false)");
+    expect(sql).toContain("to_regprocedure(g.identidad)");
+    expect(sql).toContain('oidvectortypes(p.proargtypes) = g.argumentos');
+    expect(sql).toContain("('public.fam_es_miembro_hogar(uuid)', 'uuid', true)");
+    expect(sql).toContain("('public.fam_tiene_rol_hogar(uuid,text[])', 'uuid, text[]', true)");
+    expect(sql).toContain("('public.fam_preservar_admin_hogar()', '', false)");
+    expect(sql).toContain('v_protected_function_count <> 3');
+    expect(sql).toContain('v_exact_function_contract_count <> 3');
+    expect(sql).toContain('create temporary table family_app_function_owners');
+    expect(sql).toContain('join family_app_function_owners o on o.funcion_oid = p.oid and o.propietario_oid = p.proowner');
+    expect(sql).toContain('v_preserved_function_owner_count <> 3');
+    expect(sql).toContain("raise exception 'family-app modularization security postcondition failed'");
   });
 });
 
@@ -475,6 +512,53 @@ ejecutarPostgres('migración modular en PostgreSQL local efímero', () => {
         unrelated_trigger_count: 1,
       });
     });
+  });
+
+  it('revierte privilegios inesperados, sobrecargas y deriva de propietario', async () => {
+    for (const escenario of ['truncate', 'sobrecarga', 'propietario'] as const) {
+      await conBaseDedicada(conexiones!, async (cliente, administradorDedicado) => {
+        const [historico, migracion] = await Promise.all([
+          Promise.all(rutasHistoricas.map((ruta) => readFile(ruta, 'utf8'))).then((sql) => sql.join('\n')),
+          leerMigracion(),
+        ]);
+        await cliente.query(adaptarPropietarioParaRunner(historico));
+        let migracionEjecutable = adaptarPropietarioParaRunner(migracion);
+        let rolDerivaCreado = false;
+        try {
+          if (escenario === 'truncate') {
+            await cliente.query('grant truncate on public.mv_vehiculos to authenticated');
+          } else if (escenario === 'sobrecarga') {
+            await cliente.query(`create function public.fam_es_miembro_hogar(text) returns boolean
+              language sql as 'select true'`);
+          } else {
+            await administradorDedicado.query(`create role ${ROL_DERIVA_OWNER_SQL} nologin;
+              grant ${ROL_DERIVA_OWNER_SQL} to ${ROL_RESTRINGIDO_SQL}`);
+            rolDerivaCreado = true;
+            migracionEjecutable = migracionEjecutable.replace(
+              'alter function public.mv_es_miembro(uuid) rename to fam_es_miembro_hogar;',
+              `alter function public.mv_es_miembro(uuid) rename to fam_es_miembro_hogar;
+                alter function public.fam_es_miembro_hogar(uuid) owner to ${ROL_DERIVA_OWNER_SQL};`,
+            );
+          }
+
+          await expect(cliente.query(migracionEjecutable)).rejects.toThrow(/postcondition failed/);
+          await cliente.query('rollback');
+          const contrato = await cliente.query<{ origen: number; final: number }>(`select
+            count(*) filter (where relname like 'mv_%')::integer as origen,
+            count(*) filter (where relname like 'fam_%')::integer as final
+            from pg_class c join pg_namespace n on n.oid = c.relnamespace
+            where n.nspname = 'public' and c.relkind = 'r'
+              and c.relname in ('mv_households', 'mv_household_members', 'mv_platform_roles', 'mv_vehiculos', 'mv_eventos_vehiculo',
+                'fam_hogares', 'fam_miembros_hogar', 'fam_roles_plataforma', 'fam_ve_vehiculos', 'fam_ve_eventos_vehiculo')`);
+          expect(contrato.rows[0]).toEqual({ origen: 5, final: 0 });
+        } finally {
+          if (rolDerivaCreado) {
+            await administradorDedicado.query(`revoke ${ROL_DERIVA_OWNER_SQL} from ${ROL_RESTRINGIDO_SQL};
+              drop role ${ROL_DERIVA_OWNER_SQL}`);
+          }
+        }
+      });
+    }
   });
 
   it('inventa el catálogo pre-corte y bloquea un contrato final conflictivo', async () => {

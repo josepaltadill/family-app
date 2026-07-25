@@ -748,3 +748,133 @@ The prior completion claim was reopened before corrective code because its label
 The in-memory harness is intentionally non-destructive and does not require a database target. `npx tsc --noEmit --incremental false` and `git diff --check` passed. No shared/remote database, migration SQL, runtime consumer, activation, commit, push, or PR changed. Remaining unchecked implementation and parent-owned rows remain unchanged.
 Correction `review-34e3a05ae728c4ea`: injected rollback/fix-forward actions now execute and return observed state; access derives only from post-action migration, RLS, exact preservation, and required-consumer evidence. `npx vitest run src/compartido/pruebas/recuperacion-corte-family-app.test.ts` — RED 10 failed/2 passed; final 12/12.
 Observed validation: `npm test` — 51 files passed, 3 skipped; 406 passed, 22 skipped. `npx tsc --noEmit --incremental false` passed. Final focused test and `git diff --check` are recorded after reconciliation.
+
+---
+
+## PR 2 — postcondition security evidence for renamed dependencies
+
+### Status and delivery boundary
+```yaml
+schemaName: gentle-ai.sdd-status
+changeName: family-app-modularization
+artifactStore: both
+applyState: ready
+actionContext: { mode: repo-local, workspaceRoot: /home/josep/proyectos/family-app, allowedEditRoots: [/home/josep/proyectos/family-app] }
+nextRecommended: apply
+warnings:
+  - PR 2 and PR 3 only activate in one coordinated deployment window.
+  - The PostgreSQL integration cases remain skipped without an explicitly authorized loopback URL.
+```
+
+Completed the next coherent PR 2 migration slice after safeguards published in `4df01d5`: the migration now fails closed if final functions lose `SECURITY DEFINER`, their configured empty `search_path`, a valid owner, required `authenticated` execution, `PUBLIC` revocation, or the inherited table grants/revocations. It preserves OID-bound ownership and grants; it does not recreate those objects, add compatibility, change runtime consumers, or touch a shared database.
+
+### Completed implementation task and persisted checkbox
+- [x] Actualizar dentro de la migración los cuerpos y nombres de funciones, constraints, índices, triggers y policies al prefijo propietario `fam_*`; verificar propietarios, revocaciones y grants existentes sin tratarlos como objetos renombrables, conservando `household_id`/`p_household_id` y sin crear compatibilidad `mv_*`. <!-- sdd-owner: implementation -->
+
+`tasks.md` was updated immediately and reread: this exact row is visibly `[x]`. Parent-owned rows were preserved byte-for-byte.
+
+### TDD Cycle Evidence
+| Stage | Evidence |
+|---|---|
+| RED | Added the migration source-contract for final function names, `SECURITY DEFINER`, empty `search_path`, owner presence, function revocations/grants, and table revocations/grants. Focused Vitest failed 1/21 because the security postcondition was absent. |
+| GREEN | Added catalog assertions inside the existing transaction. Focused migration suite passed 19/19, with 2 PostgreSQL cases skipped because no explicitly authorized loopback URL was supplied. |
+| TRIANGULATE | `npm test` passed 51 files and 3 skipped: 407 passed, 22 skipped. `npx tsc --noEmit --incremental false` and `git diff --check` passed. |
+| REFACTOR | Scoped the pre-existing owner-table loop assertion to its four renaming loops so postcondition catalog queries do not make the test count brittle. |
+
+### Files and workload
+- `supabase/migrations/20260713000000_family_app_modularization.sql`: adds final transactional catalog checks for function security/ownership/grants and inherited table privileges.
+- `src/compartido/pruebas/migracion-family-app-modularization.test.ts`: adds the RED source contract and scopes the existing loop assertion.
+- `openspec/changes/family-app-modularization/tasks.md`: marks the completed PR 2 GREEN row.
+- `openspec/changes/family-app-modularization/apply-progress.md`: cumulative evidence.
+
+Forecast before edits: 120 authored lines including test, migration, task checkbox, and progress evidence. Actual implementation delta before this progress entry was +44/-1; this entry and the checkbox keep the work unit comfortably below the 400-line hard budget. No design deviation, commit, push, PR, activation, runtime-consumer change, or shared-Supabase mutation occurred.
+
+Remaining first unchecked implementation task:
+- [ ] Implementar el preflight y la evidencia operativa en los scripts/SQL existentes bajo `supabase/validation/` y `scripts/`, incluyendo backup restaurable, OID/definiciones, conteos, UUIDs, relaciones, RLS, jobs, webhooks y consumidores externos. <!-- sdd-owner: implementation -->
+
+Deferred lifecycle actions remain parent-owned: confirm backup/tráfico/jobs/consumers/lock limits; activate schema and consumers together; execute complete post-cut evidence; monitor the deployment window.
+
+---
+
+## Gate correction — complete privilege matrix and exact empty search path
+
+The independent gate correctly rejected the prior postcondition: it accepted any `search_path=*` value and only checked `SELECT` for table privileges. The task row was returned to `[ ]` during the correction and restored to `[x]` only after the complete contract below passed.
+
+### Completed implementation task and persisted checkbox
+- [x] Actualizar dentro de la migración los cuerpos y nombres de funciones, constraints, índices, triggers y policies al prefijo propietario `fam_*`; verificar propietarios, revocaciones y grants existentes sin tratarlos como objetos renombrables, conservando `household_id`/`p_household_id` y sin crear compatibilidad `mv_*`. <!-- sdd-owner: implementation -->
+
+`tasks.md` was reread after the correction: task 66 is visibly `[x]`; parent-owned rows were not changed.
+
+### TDD Cycle Evidence
+| Stage | Evidence |
+|---|---|
+| RED | Expanded the source contract to require catalog value `search_path=""`, reject the prior wildcard, deny anonymous `SELECT`/`INSERT`/`UPDATE`/`DELETE`, and compare the complete authenticated matrix. Focused Vitest failed 1/21 because the prior migration lacked the exact guard. |
+| GREEN | The postcondition now requires exactly `search_path=""`; it checks all four anonymous privileges on all five tables and compares all four authenticated privileges against the five historical table rows. Focused migration suite passed 19/19; 2 PostgreSQL cases remained skipped because no explicitly authorized loopback URL was supplied. |
+| TRIANGULATE | `npm test`: 51 files passed, 3 skipped; 407 passed, 22 skipped. `npx tsc --noEmit --incremental false` and `git diff --check` passed. |
+| REFACTOR | Expressed authenticated permissions as one explicit table matrix, including the deliberately empty platform-role grant row, rather than independent partial counts. |
+
+### Files and workload
+- `supabase/migrations/20260713000000_family_app_modularization.sql`
+- `src/compartido/pruebas/migracion-family-app-modularization.test.ts`
+- `openspec/changes/family-app-modularization/tasks.md`
+- `openspec/changes/family-app-modularization/apply-progress.md`
+
+Forecast for this correction: 90 authored lines. Current work-unit delta is +111/-2 = 113 lines before this evidence; including this evidence and checkbox remains below the 400-line hard budget. No design deviation, commit, push, PR, lifecycle command, activation, runtime-consumer change, or shared-Supabase mutation occurred.
+
+Remaining first unchecked implementation task:
+- [ ] Implementar el preflight y la evidencia operativa en los scripts/SQL existentes bajo `supabase/validation/` y `scripts/`, incluyendo backup restaurable, OID/definiciones, conteos, UUIDs, relaciones, RLS, jobs, webhooks y consumidores externos. <!-- sdd-owner: implementation -->
+
+---
+
+## Corrected candidate after terminal escalation `review-2260ef2f54fc880d`
+
+The user authorized a new candidate; this correction did not mutate or reuse the terminal lineage and did not invoke a lifecycle command.
+
+### Completed implementation task and persisted checkbox
+- [x] Actualizar dentro de la migración los cuerpos y nombres de funciones, constraints, índices, triggers y policies al prefijo propietario `fam_*`; verificar propietarios, revocaciones y grants existentes sin tratarlos como objetos renombrables, conservando `household_id`/`p_household_id` y sin crear compatibilidad `mv_*`. <!-- sdd-owner: implementation -->
+
+Task 66 was changed to `[ ]` before correction and reread as `[x]` only after all checks passed. Parent-owned rows remain byte-for-byte unchanged.
+
+### TDD Cycle Evidence
+| Stage | Evidence |
+|---|---|
+| RED | Source contract added all PostgreSQL table privileges (`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`, `REFERENCES`, `TRIGGER`, `MAINTAIN`) for anonymous and authenticated effective checks, plus exact `to_regprocedure`/identity-argument contracts and overload-count guards. Focused Vitest failed 1/21 because `TRUNCATE` and exact signature checks were absent. |
+| GREEN | The migration now compares the complete effective authenticated privilege matrix, denies every table privilege to `anon` (therefore also any inherited `PUBLIC` privilege), requires exactly three protected final functions, and verifies each exact signature, `SECURITY DEFINER`, owner presence, empty search path, and execution grants. Focused suite passed 19/19; 2 isolated PostgreSQL cases are skipped without an explicitly authorized loopback URL. |
+| TRIANGULATE | `npm test`: 51 files passed, 3 skipped; 407 passed, 22 skipped. `npx tsc --noEmit --incremental false` and `git diff --check` passed. |
+| REFACTOR | Replaced partial DML checks with explicit complete matrices. Narrowed the legacy non-destructive source assertion to destructive statements so security verification of `TRUNCATE` is allowed. No repository formatter is configured (`package.json` has no formatting script and `node_modules/.bin/prettier` is absent). |
+
+### Scope and evidence
+- Changed: `supabase/migrations/20260713000000_family_app_modularization.sql`, `src/compartido/pruebas/migracion-family-app-modularization.test.ts`, `openspec/changes/family-app-modularization/tasks.md`, and this cumulative progress file.
+- RELIABILITY-003 was native-classified `unknown`; only the existing base concurrency test was read to confirm it remains separate. No concurrency code or test changed.
+- Forecast for this correction: 95 authored lines. The cumulative work-unit remains below the 400-line hard cap; final numstat is recorded with this artifact.
+- No commit, push, PR, shared database mutation, activation, or runtime-consumer change occurred.
+
+Remaining first unchecked implementation task:
+- [ ] Implementar el preflight y la evidencia operativa en los scripts/SQL existentes bajo `supabase/validation/` y `scripts/`, incluyendo backup restaurable, OID/definiciones, conteos, UUIDs, relaciones, RLS, jobs, webhooks y consumidores externos. <!-- sdd-owner: implementation -->
+
+---
+
+## Gate correction — exact owner preservation and executable fail-closed regressions
+
+This is the single authorized correction to the new-candidate apply attempt. No lifecycle operation, commit, push, activation, or shared/remote database connection occurred.
+
+### Completed implementation task and persisted checkbox
+- [x] Actualizar dentro de la migración los cuerpos y nombres de funciones, constraints, índices, triggers y policies al prefijo propietario `fam_*`; verificar propietarios, revocaciones y grants existentes sin tratarlos como objetos renombrables, conservando `household_id`/`p_household_id` y sin crear compatibilidad `mv_*`. <!-- sdd-owner: implementation -->
+
+Task 66 was returned to `[ ]` before this correction and reread as `[x]` after GREEN/TRIANGULATE. Parent-owned tasks are unchanged.
+
+### TDD Cycle Evidence
+| Stage | Evidence |
+|---|---|
+| RED | Added structural support for an OID-bound pre-rename owner snapshot plus executable integration scenarios for `TRUNCATE`, protected-name overload, and owner drift. Focused Vitest failed 1/22 because the migration did not capture/compare function owners; all three PostgreSQL scenarios were skipped without an authorized loopback URL. |
+| GREEN | The migration records the exact source function OID/owner pair in a transaction-local table before replacement/rename and requires the same OID-owner pair after the final signature checks. The isolated harness now injects each unsafe state, requires migration failure, rolls back, and verifies the five-source/zero-final table contract. Focused suite passed 19/19, 3 skipped. |
+| TRIANGULATE | `npm test`: 51 files passed, 3 skipped; 407 passed, 23 skipped. `npx tsc --noEmit --incremental false` and `git diff --check` passed. |
+| REFACTOR | The harness supplies a dedicated admin connection only inside its disposable loopback database so the owner-drift scenario can grant/revoke a temporary no-login role and clean it up; no ambient owner name is encoded in migration SQL. |
+
+### Scope and workload
+- Changed: `supabase/migrations/20260713000000_family_app_modularization.sql`, `src/compartido/pruebas/migracion-family-app-modularization.test.ts`, `openspec/changes/family-app-modularization/tasks.md`, and this cumulative progress file.
+- The behavioral PostgreSQL regression scenarios are implemented but skipped: no explicitly authorized loopback URL was present. No execution evidence is claimed for them.
+- Forecast for this correction: 105 authored lines. Final cumulative numstat is recorded with this artifact and remains under the 400-line cap.
+
+Remaining first unchecked implementation task:
+- [ ] Implementar el preflight y la evidencia operativa en los scripts/SQL existentes bajo `supabase/validation/` y `scripts/`, incluyendo backup restaurable, OID/definiciones, conteos, UUIDs, relaciones, RLS, jobs, webhooks y consumidores externos. <!-- sdd-owner: implementation -->
