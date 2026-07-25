@@ -621,3 +621,68 @@ La detección final consulta ahora `pg_type` unido a su `pg_namespace`, conserva
 TDD estricto: RED unitario 1/3 por contrato todavía basado en `pg_class`; RED PostgreSQL 19/20 porque un enum independiente `public.fam_hogares` no fue detectado. GREEN: unitario 3/3 y PostgreSQL loopback aislado 20/20. La triangulación conserva el caso de tabla conflictiva y fija en el unitario el uso de `pg_type`, la ausencia de `pg_class` y el orden determinista.
 
 Verificación: `npm test` — 49 archivos aprobados, 3 omitidos; 380 tests aprobados, 22 omitidos. `npx tsc --noEmit --incremental false` aprobó. La checkbox global de preflight permanece `[ ]`; backup recuperable, consumidores externos e invariantes amplias siguen en PR 2C-2.
+
+---
+
+## PR 2C-2 — preflight operativo completo
+
+### Estado y límite de entrega
+```yaml
+schemaName: gentle-ai.sdd-status
+changeName: family-app-modularization
+artifactStore: both
+authoritativeOpenSpec: { applyState: ready, nextRecommended: apply }
+actionContext: { mode: repo-local, workspaceRoot: /home/josep/proyectos/family-app, allowedEditRoots: [/home/josep/proyectos/family-app] }
+delivery: { strategy: feature-branch-chain, boundary: PR-2C-2-operational-preflight, capChangedLines: 400 }
+```
+Pronóstico exacto antes de artefactos: +174/-0 (83 líneas de prueba y 91 de implementación). Con el checkbox (+1/-1) y esta evidencia (+37/-0), el total real es **+212/-1 = 213** líneas, bajo el límite de 400.
+
+### Tarea completada y checkbox persistido
+- [x] Crear pruebas de preflight que fallen ante objetos `fam_*` conflictivos, consumidores externos `mv_*` no clasificados, invariantes rotas, backup no recuperable o dependencias de catálogo no inventariadas. <!-- sdd-owner: implementation -->
+
+`tasks.md` se actualizó inmediatamente y se releyó: esta fila está visiblemente `[x]`. Las filas parent-owned permanecen byte a byte sin cambios.
+
+### TDD Cycle Evidence
+| Trabajo | Safety net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|
+| Preflight operativo | `preflight-catalogo-family-app.test.ts`: 3/3 | El nuevo test falló por módulo inexistente. | `preflight-operativo-family-app.test.ts`: 4/4 tras validar evidencia de restauración, clasificación y SQL de invariantes. | 10/10: cada invariante amplia y una clasificación desconocida fallan cerradas; catálogo+operativo 13/13. | Validadores pequeños separados para backup, consumidores e invariantes; sin cambio de migración ni runtime. |
+
+### Cambios y verificación
+- `supabase/validation/preflight-operativo-family-app.ts`: exige evidencia de backup restaurado, rechaza consumidores `mv_*` sin clasificación/justificación y consulta duplicados, huérfanos, cruces de hogar, último admin y membresías inválidas.
+- `src/compartido/pruebas/preflight-operativo-family-app.test.ts`: cubre aceptación y fallos cerrados para backup, consumidor externo y las seis invariantes.
+- `supabase/validation/preflight-catalogo-family-app.ts` y su prueba existente siguen cubriendo conflictos `fam_*` y el inventario determinista de `pg_depend`.
+- `npx vitest run src/compartido/pruebas/preflight-catalogo-family-app.test.ts src/compartido/pruebas/preflight-operativo-family-app.test.ts` — 13/13.
+- `npm test` — 50 archivos pasan, 3 omitidos; 390 pasan, 22 omitidos.
+- `npx tsc --noEmit --incremental false` y `git diff --check` — pasan.
+
+Sin desviación de diseño. No hubo base compartida, reset destructivo, activación, commit, push ni PR. Límite de rollback: retirar solo los dos archivos de preflight operativo y su prueba; no toca migración, consumidores ni esquema.
+
+Pendiente en PR 2: rollback/fix-forward, evidencia operativa ejecutable, aserciones post-migración, datasets/integración, catálogo final, ensayo de recuperación y refactor de migración. Acciones parent-owned diferidas: confirmar backup/tráfico/jobs/consumidores, activación coordinada y evidencia post-corte.
+
+---
+
+## PR 2C-2 — correction: observed recovery proof and combined preflight
+
+This correction supersedes the prior “complete operational preflight” claim. A non-empty backup label was not recovery evidence, and separate catalog/operational functions permitted partial invocation.
+
+### TDD Cycle Evidence
+| Work | Safety net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|
+| Recovery proof + combined entry | Catalog/operational focused tests: 13/13 | New contract made 10 assertions fail: old code accepted labels and lacked `ejecutarPreflightFamiliar`. | 12/12 operational tests after injecting a recovery observer and requiring its successful preservation result. | Catalog+operational: 16/16; successful combined run and catalog-conflict short circuit prove neither surface is optional. | The recovery observer is a small injected type; both catalog and operational reads remain read-only. |
+
+### Corrected contract and verification
+- `backup` now requires a 64-hex snapshot fingerprint and an injected observer result bound to the same backup ID, all five source tables, preserved rows/UUIDs, and preserved relations. Empty, forged, incomplete, or mismatched evidence fails closed.
+- `ejecutarPreflightFamiliar` invokes PR 2C-1 catalog inspection before PR 2C-2 operational checks and returns both inventories. A final-name catalog conflict prevents the operational query.
+- Focused RED: 10 failures; focused GREEN: 12/12; triangulation: `npx vitest run src/compartido/pruebas/preflight-catalogo-family-app.test.ts src/compartido/pruebas/preflight-operativo-family-app.test.ts` — 16/16.
+- `npm test` — 50 files passed, 3 skipped; 393 passed, 22 skipped.
+- `npx tsc --noEmit --incremental false` and `git diff --check` — passed.
+
+The global preflight-test checkbox remains visibly `[x]`: it is now supported by all five gates and the required single combined entry. No shared database, reset, activation, commit, push, or PR was performed. Total current delta is recorded after final reconciliation and remains below 400.
+
+Final reconciliation: tracked `+60/-1` plus untracked `+235/-0` is **+295/-1 = 296 authored changed lines**, leaving 104 lines below the 400-line cap.
+
+---
+
+## Correction `review-e7483c5e1681ac97` — catalog-derived consumers
+
+`RELIABILITY-001`: the combined preflight now reconciles normal external `mv_*` dependencies from the PR 2C-1 catalog inventory with explicit caller classifications; undeclared dependencies fail closed while internal dependencies remain allowed. RED observed 1/14 failing because an undeclared catalog consumer was accepted; GREEN passed 14/14; focused catalog/operational triangulation passed 17/17. Full `npm test` passed 394 tests with 22 skipped, and `npx tsc --noEmit --incremental false` passed. `RELIABILITY-002` remains an informational PostgreSQL-integration follow-up.
