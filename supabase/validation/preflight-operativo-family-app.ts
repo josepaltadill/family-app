@@ -45,6 +45,31 @@ export type InventarioConsumidoresObservados = Readonly<{
 
 export type InspectorConsumidoresExternos = () => Promise<InventarioConsumidoresObservados>;
 
+export type InventarioRlsObservado = Readonly<{
+  estado: 'inventario-verificado';
+  tablas: ReadonlyArray<Readonly<{
+    tabla: string;
+    rlsHabilitado: boolean;
+    politicas: ReadonlyArray<Readonly<{
+      nombre: string;
+      comando: string;
+      roles: readonly string[];
+      expresionUso: string | null;
+      expresionCheck: string | null;
+    }>>;
+  }>>;
+}>;
+
+export type InspectorRls = () => Promise<InventarioRlsObservado>;
+
+const TABLAS_RLS_ESPERADAS = [
+  'mv_households',
+  'mv_household_members',
+  'mv_platform_roles',
+  'mv_vehiculos',
+  'mv_eventos_vehiculo',
+] as const;
+
 export type ResultadoPreflightOperativo = Readonly<{
   backup: EvidenciaPreflightOperativo['backup'];
   consumidoresExternos: EvidenciaPreflightOperativo['consumidoresExternos'];
@@ -125,6 +150,23 @@ function exigirConsumidoresObservadosClasificados(
   }
 }
 
+function exigirInventarioRlsCompleto(inventario: InventarioRlsObservado) {
+  if (inventario.estado !== 'inventario-verificado' || !Array.isArray(inventario.tablas)) {
+    throw new Error('Preflight operativo bloqueado: falta inventario RLS verificado');
+  }
+  const tablasPorNombre = new Map(inventario.tablas.map((tabla) => [tabla.tabla, tabla]));
+  const invalidas = TABLAS_RLS_ESPERADAS.filter((tabla) => (
+    inventario.tablas.filter(({ tabla: nombre }) => nombre === tabla).length !== 1
+    || !tablasPorNombre.get(tabla)?.rlsHabilitado
+    || !Array.isArray(tablasPorNombre.get(tabla)?.politicas)
+  ));
+  const inesperadas = [...tablasPorNombre.keys()]
+    .filter((tabla) => !TABLAS_RLS_ESPERADAS.includes(tabla as typeof TABLAS_RLS_ESPERADAS[number]));
+  if (invalidas.length > 0 || inesperadas.length > 0) {
+    throw new Error(`Preflight operativo bloqueado: inventario RLS incompleto ${[...invalidas, ...inesperadas].join(', ')}`);
+  }
+}
+
 function exigirInvariantes(invariantes: ResultadoPreflightOperativo['invariantes']) {
   const rotas = Object.entries(invariantes).filter(([, cantidad]) => cantidad > 0);
   if (rotas.length > 0) {
@@ -169,11 +211,14 @@ export async function ejecutarPreflightFamiliar(
   evidencia: EvidenciaPreflightOperativo,
   verificarRecuperacion: VerificadorRecuperacion,
   inspeccionarConsumidores: InspectorConsumidoresExternos,
+  inspeccionarRls: InspectorRls,
 ) {
   const inventarioCatalogo = await inspeccionarPreflightCatalogoFamiliar(catalogo);
   exigirDependenciasExternasClasificadas(inventarioCatalogo, evidencia.consumidoresExternos);
   const consumidoresObservados = await inspeccionarConsumidores();
   exigirConsumidoresObservadosClasificados(consumidoresObservados, evidencia.consumidoresExternos);
+  const rlsObservado = await inspeccionarRls();
+  exigirInventarioRlsCompleto(rlsObservado);
   const inventarioOperativo = await ejecutarPreflightOperativoFamiliar(operativo, evidencia, verificarRecuperacion);
-  return { catalogo: inventarioCatalogo, operativo: inventarioOperativo, consumidoresObservados };
+  return { catalogo: inventarioCatalogo, operativo: inventarioOperativo, consumidoresObservados, rlsObservado };
 }

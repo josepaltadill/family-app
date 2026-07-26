@@ -909,3 +909,34 @@ La tarea global de la línea 67 permanece **`[ ]`**: este slice no completa toda
 | Rollback boundary | Revertir solo el tipo/guard/invocación de inventario observado en `preflight-operativo-family-app.ts`, sus dos escenarios enfocados y esta entrada de progreso; catálogo, migración, recuperación y runtime quedan intactos. |
 
 Verificación completa: `npm test` — 51 archivos pasan, 3 omitidos; 408 pasan, 23 omitidos. `npx tsc --noEmit --incremental false` y `git diff --check` pasan. No se ejecutó PostgreSQL ni se tocó Supabase compartido; Docker no está instalado en este entorno. Sin commit, push, PR, lifecycle command ni activación.
+
+---
+
+## PR 2 — inventario RLS observado
+
+### Estado y límite
+```yaml
+schemaName: gentle-ai.sdd-status
+changeName: family-app-modularization
+artifactStore: both
+applyState: ready
+delivery: { strategy: feature-branch-chain, boundary: PR-2-operational-rls-inventory }
+```
+
+Se implementó solo el contrato fail-closed para incorporar evidencia RLS observada al preflight combinado. El inspector inyectado debe devolver exactamente las cinco tablas origen, cada una una sola vez, con RLS habilitado y un inventario de políticas que conserva nombre, comando, roles y expresiones `USING`/`WITH CHECK`. El resultado devuelve el inventario completo como evidencia operativa; una tabla ausente, duplicada, inesperada, sin políticas inventariables o con RLS deshabilitado bloquea antes de consultar invariantes.
+
+La tarea global de la línea 67 permanece **`[ ]`**: los slices publicados cubren OID/definiciones, backup, invariantes, consumidores y ahora RLS/jobs/webhooks, pero aún faltan los conteos, conjuntos/hash de UUID y relaciones concretos exigidos por la misma fila. `tasks.md` no cambió.
+
+### TDD Cycle Evidence
+| Trabajo | Safety net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|
+| RLS observado | Preflight operativo 15/15 | El contrato nuevo falló 3/17: faltaba `rlsObservado` y se aceptaban una tabla ausente y RLS deshabilitado. | La entrada combinada invoca el inspector, valida el inventario exacto y devuelve la evidencia; 17/17. | Tabla ausente y `mv_vehiculos` sin RLS toman rutas de bloqueo distintas; catálogo+operativo 20/20. | Se tipó la evidencia de políticas y se indexaron tablas por nombre; 17/17 después del refactor. |
+
+### Work Unit Evidence
+| Evidencia | Resultado |
+|---|---|
+| Focused test | `npx vitest run src/compartido/pruebas/preflight-catalogo-family-app.test.ts src/compartido/pruebas/preflight-operativo-family-app.test.ts` — 2 archivos, 20/20 pasan. |
+| Runtime harness | `npx vitest run src/compartido/pruebas/preflight-operativo-family-app.test.ts` — la entrada combinada acepta cinco tablas con evidencia de política y bloquea inventarios RLS inseguros; 17/17 pasan. No se requiere una frontera PostgreSQL para este contrato de inspector inyectado. |
+| Rollback boundary | Revertir el tipo/guard/invocación `InspectorRls` en `preflight-operativo-family-app.ts`, sus tres expectativas enfocadas y esta entrada; catálogo, migración, recuperación, jobs/webhooks y runtime permanecen intactos. |
+
+Verificación completa: `npm test` — 51 archivos pasan, 3 omitidos; 410 pasan, 23 omitidos. `npx tsc --noEmit --incremental false` y `git diff --check` pasan. No se ejecutó PostgreSQL ni se tocó Supabase compartido. Sin commit, push, PR, lifecycle command ni activación.

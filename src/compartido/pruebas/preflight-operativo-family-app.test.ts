@@ -47,6 +47,25 @@ const inspectorConsumidores = vi.fn().mockResolvedValue({
   webhooks: [],
 });
 
+const tablasRls = ['mv_households', 'mv_household_members', 'mv_platform_roles', 'mv_vehiculos', 'mv_eventos_vehiculo'];
+
+const inventarioRls = {
+  estado: 'inventario-verificado',
+  tablas: tablasRls.map((tabla) => ({
+    tabla,
+    rlsHabilitado: true,
+    politicas: tabla === 'mv_vehiculos' ? [{
+      nombre: 'mv_vehiculos_select_member',
+      comando: 'SELECT',
+      roles: ['authenticated'],
+      expresionUso: 'mv_es_miembro(household_id)',
+      expresionCheck: null,
+    }] : [],
+  })),
+} as const;
+
+const inspectorRls = vi.fn().mockResolvedValue(inventarioRls);
+
 describe('ejecutarPreflightOperativoFamiliar', () => {
   it('acepta una restauración demostrada, consumidores clasificados y todas las invariantes pre-corte', async () => {
     const cliente = clienteConInvariantes();
@@ -112,6 +131,7 @@ describe('ejecutarPreflightOperativoFamiliar', () => {
       evidenciaValida,
       verificadorRecuperacion,
       inspectorConsumidores,
+      inspectorRls,
     );
     expect(resultado.catalogo.objetosOrigen).toHaveLength(5);
     expect(resultado.operativo.invariantes).toEqual(expect.objectContaining({ hogaresSinAdmin: 0 }));
@@ -120,6 +140,12 @@ describe('ejecutarPreflightOperativoFamiliar', () => {
       jobs: [{ identidad: 'job:family-app-reporter', referencia: 'mv_vehiculos' }],
       webhooks: [],
     });
+    expect(resultado.rlsObservado.tablas).toHaveLength(5);
+    expect(resultado.rlsObservado.tablas.map(({ tabla, rlsHabilitado }) => ({ tabla, rlsHabilitado }))).toEqual(
+      tablasRls.map((tabla) => ({ tabla, rlsHabilitado: true })),
+    );
+    expect(resultado.rlsObservado).toEqual(inventarioRls);
+    expect(inspectorRls).toHaveBeenCalledTimes(1);
     expect(catalogo.query).toHaveBeenCalledTimes(3);
   });
 
@@ -134,7 +160,7 @@ describe('ejecutarPreflightOperativoFamiliar', () => {
 
     await expect(ejecutarPreflightFamiliar(catalogo, clienteConInvariantes(), {
       ...evidenciaValida, consumidoresExternos: [],
-    }, verificadorRecuperacion, inspectorConsumidores)).rejects.toThrow(/vista_otro_servicio/);
+    }, verificadorRecuperacion, inspectorConsumidores, inspectorRls)).rejects.toThrow(/vista_otro_servicio/);
   });
 
   it('rechaza un webhook observado que referencia mv_* sin clasificación explícita', async () => {
@@ -151,8 +177,26 @@ describe('ejecutarPreflightOperativoFamiliar', () => {
 
     await expect(ejecutarPreflightFamiliar(catalogo, operativo, {
       ...evidenciaValida, consumidoresExternos: [],
-    }, verificadorRecuperacion, inspectorWebhook)).rejects.toThrow(/webhook:other-app/);
+    }, verificadorRecuperacion, inspectorWebhook, inspectorRls)).rejects.toThrow(/webhook:other-app/);
     expect(operativo.query).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['falta una tabla requerida', tablasRls.slice(1), /mv_households/],
+    ['una tabla tiene RLS deshabilitado', tablasRls, /mv_vehiculos/],
+  ])('rechaza el inventario RLS cuando %s', async (_caso, tablas, mensaje) => {
+    const catalogo = { query: vi.fn()
+      .mockResolvedValueOnce({ rows: tablasRls.map((nombre, indice) => ({ nombre, oid: String(indice), propietario: 'postgres', definicion: [] })) })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] }) };
+    const inspeccionarRls = vi.fn().mockResolvedValue({
+      estado: 'inventario-verificado',
+      tablas: tablas.map((tabla) => ({ tabla, rlsHabilitado: tabla !== 'mv_vehiculos', politicas: [] })),
+    });
+
+    await expect(ejecutarPreflightFamiliar(
+      catalogo, clienteConInvariantes(), evidenciaValida, verificadorRecuperacion, inspectorConsumidores, inspeccionarRls,
+    )).rejects.toThrow(mensaje);
   });
 
   it('no ejecuta las invariantes si el catálogo bloquea un conflicto final', async () => {
@@ -166,6 +210,7 @@ describe('ejecutarPreflightOperativoFamiliar', () => {
       evidenciaValida,
       verificadorRecuperacion,
       inspectorConsumidores,
+      inspectorRls,
     )).rejects.toThrow(/fam_hogares/);
     expect(operativo.query).not.toHaveBeenCalled();
   });
