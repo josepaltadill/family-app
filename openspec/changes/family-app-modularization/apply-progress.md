@@ -971,3 +971,36 @@ La línea 67 queda **`[x]`** porque la implementación acumulada ya cubre backup
 | Rollback boundary | Revertir `InventarioDatosObservado`/`InspectorDatos`, su guard e invocación en `preflight-operativo-family-app.ts`, los cinco escenarios enfocados, la checkbox de línea 67 y esta entrada; los slices previos permanecen intactos. |
 
 Verificación completa: `npm test` — 51 archivos pasan, 3 omitidos; 415 pasan, 23 omitidos. `npx tsc --noEmit --incremental false` y `git diff --check` pasan. Sin desviación de diseño, PostgreSQL, Supabase compartido, commit, push, PR, lifecycle command ni activación.
+
+---
+
+## PR 2 — guard transaccional de nombres productivos `mv_*`
+
+### Estado y límite
+```yaml
+schemaName: gentle-ai.sdd-status
+changeName: family-app-modularization
+artifactStore: both
+applyState: ready
+delivery: { strategy: feature-branch-chain, boundary: PR-2-in-transaction-catalog-guard }
+```
+
+Se implementó solo el siguiente gap dependency-ready de la línea 68: la postcondición dentro de la transacción ya no inspecciona únicamente `pg_class`; rechaza nombres productivos `mv_*` restantes en `pg_class`, `pg_constraint`, `pg_proc`, `pg_trigger` y `pg_policy`, limitando constraints/triggers/policies a las cinco tablas propietarias para no afectar objetos de otras aplicaciones.
+
+La línea 68 permanece **`[ ]`**. Ya existían comprobaciones transaccionales de los cinco nombres finales, RLS en los cinco y contratos de funciones/grants; todavía faltan la aserción post-migración independiente y la completitud exacta de dependencias esenciales (constraints, índices, triggers y policies esperados), además de decidir si “exactamente cinco” debe rechazar otras tablas `fam_*` no contractuales.
+
+### TDD Cycle Evidence
+| Trabajo | Safety net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|
+| Catálogos productivos `mv_*` | Migración enfocada 19/19, 3 omitidas | El nuevo contrato falló 1/20 porque la postcondición no consultaba `pg_constraint`/trigger/policy. | La postcondición unificada pasó 20/20, 3 omitidas. | PostgreSQL local dedicado: la migración instrumentada dejó un constraint `mv_*` después de los renombres; la postcondición abortó y el rollback restauró 5 tablas origen/0 finales, 1/1. | No se mezcló harness post-migración ni inventario de dependencias finales. |
+
+### Work Unit Evidence
+| Evidencia | Resultado |
+|---|---|
+| Focused test | `npx vitest run src/compartido/pruebas/migracion-family-app-modularization.test.ts` — 20/20 pasan, 3 omitidas tras GREEN. |
+| Runtime harness | `SUPABASE_BOOTSTRAP_DATABASE_URL=<loopback local> npx vitest run ... -t 'revierte si queda una dependencia productiva'` — 1/1 pasa; usa exclusivamente la base dedicada recreada por el harness. |
+| Rollback boundary | Revertir la consulta unificada `v_mv_count`, el contrato/escenario enfocado y esta entrada; preflight, consumidores, RLS runtime y otros slices permanecen intactos. |
+
+Verificación final: migración enfocada 20 pasan/4 omitidas; `npm test` 51 archivos pasan/3 omitidos, 416 pruebas pasan/24 omitidas; `npx tsc --noEmit --incremental false` y `git diff --check` pasan. Delta total: +86/-2 = 88 líneas authored.
+
+La ejecución PostgreSQL completa del archivo encontró además un fallo fuera de este escenario: el caso de deriva de propietario recibe `permission denied for schema public` en vez de la postcondición esperada. No se corrigió ni se usó como evidencia de este slice. No hubo Supabase compartido, commit, push, PR, lifecycle command ni activación.

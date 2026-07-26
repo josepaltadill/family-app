@@ -171,8 +171,22 @@ begin
   select count(*) into v_rls_count from pg_class c join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relkind = 'r' and c.relrowsecurity
     and c.relname in ('fam_hogares', 'fam_miembros_hogar', 'fam_roles_plataforma', 'fam_ve_vehiculos', 'fam_ve_eventos_vehiculo');
-  select count(*) into v_mv_count from pg_class c join pg_namespace n on n.oid = c.relnamespace
-  where n.nspname = 'public' and c.relname ~ '^mv_(households|household_members|platform_roles|vehiculos|eventos_vehiculo)';
+  select count(*) into v_mv_count from (
+    select c.oid from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relname ~ '^mv_(households|household_members|platform_roles|vehiculos|eventos_vehiculo)(_|$)'
+    union all
+    select c.oid from pg_constraint c join pg_class t on t.oid = c.conrelid join pg_namespace n on n.oid = t.relnamespace
+    where n.nspname = 'public' and t.relname in ('fam_hogares', 'fam_miembros_hogar', 'fam_roles_plataforma', 'fam_ve_vehiculos', 'fam_ve_eventos_vehiculo') and c.conname ~ '^mv_'
+    union all
+    select p.oid from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in ('mv_es_miembro', 'mv_tiene_rol', 'mv_preservar_admin_hogar')
+    union all
+    select tg.oid from pg_trigger tg join pg_class t on t.oid = tg.tgrelid join pg_namespace n on n.oid = t.relnamespace
+    where n.nspname = 'public' and not tg.tgisinternal and t.relname in ('fam_hogares', 'fam_miembros_hogar', 'fam_roles_plataforma', 'fam_ve_vehiculos', 'fam_ve_eventos_vehiculo') and tg.tgname ~ '^mv_'
+    union all
+    select p.oid from pg_policy p join pg_class t on t.oid = p.polrelid join pg_namespace n on n.oid = t.relnamespace
+    where n.nspname = 'public' and t.relname in ('fam_hogares', 'fam_miembros_hogar', 'fam_roles_plataforma', 'fam_ve_vehiculos', 'fam_ve_eventos_vehiculo') and p.polname ~ '^mv_'
+  ) productive_mv_object;
   select count(*) into v_protected_function_count
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public'

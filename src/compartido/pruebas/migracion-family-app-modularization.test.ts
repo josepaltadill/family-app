@@ -418,6 +418,17 @@ describe('migración atómica family-app modularization', () => {
     expect(renombresPropietarios.match(/t\.relname in \('fam_hogares'/g)).toHaveLength(4);
   });
 
+  it('rechaza nombres productivos mv_* restantes en todos los catálogos propietarios', async () => {
+    const sql = await leerMigracion();
+    const postcondiciones = sql.split('-- Verify final tables, RLS, and that no owner-specific mv_* catalog objects remain.')[1];
+
+    expect(postcondiciones).toContain('from pg_class');
+    expect(postcondiciones).toContain('from pg_constraint');
+    expect(postcondiciones).toContain('from pg_proc');
+    expect(postcondiciones).toContain('from pg_trigger');
+    expect(postcondiciones).toContain('from pg_policy');
+  });
+
   it('renombra dependencias propietarias sin crear aliases de compatibilidad', async () => {
     const sql = await leerMigracion();
 
@@ -511,6 +522,32 @@ ejecutarPostgres('migración modular en PostgreSQL local efímero', () => {
         unrelated_policy_count: 1,
         unrelated_trigger_count: 1,
       });
+    });
+  });
+
+  it('revierte si queda una dependencia productiva mv_* tras los renombres', async () => {
+    await conBaseDedicada(conexiones!, async (cliente) => {
+      const [historico, migracion] = await Promise.all([
+        Promise.all(rutasHistoricas.map((ruta) => readFile(ruta, 'utf8'))).then((sql) => sql.join('\n')),
+        leerMigracion(),
+      ]);
+      await cliente.query(adaptarPropietarioParaRunner(historico));
+      const migracionConDependenciaResidual = adaptarPropietarioParaRunner(migracion).replace(
+        '-- Verify final tables, RLS, and that no owner-specific mv_* catalog objects remain.',
+        `alter table public.fam_ve_vehiculos
+          add constraint mv_residual_productive_check check (true);
+
+        -- Verify final tables, RLS, and that no owner-specific mv_* catalog objects remain.`,
+      );
+
+      await expect(cliente.query(migracionConDependenciaResidual)).rejects.toThrow(/postcondition failed/);
+      await cliente.query('rollback');
+      const contrato = await cliente.query<{ origen: number; final: number }>(`select
+        count(*) filter (where relname ~ '^mv_(households|household_members|platform_roles|vehiculos|eventos_vehiculo)$')::integer as origen,
+        count(*) filter (where relname ~ '^fam_')::integer as final
+        from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind = 'r'`);
+      expect(contrato.rows[0]).toEqual({ origen: 5, final: 0 });
     });
   });
 
