@@ -878,3 +878,34 @@ Task 66 was returned to `[ ]` before this correction and reread as `[x]` after G
 
 Remaining first unchecked implementation task:
 - [ ] Implementar el preflight y la evidencia operativa en los scripts/SQL existentes bajo `supabase/validation/` y `scripts/`, incluyendo backup restaurable, OID/definiciones, conteos, UUIDs, relaciones, RLS, jobs, webhooks y consumidores externos. <!-- sdd-owner: implementation -->
+
+---
+
+## PR 2 — inventario observado de jobs y webhooks
+
+### Estado y límite
+```yaml
+schemaName: gentle-ai.sdd-status
+changeName: family-app-modularization
+artifactStore: both
+applyState: ready
+delivery: { strategy: feature-branch-chain, boundary: PR-2-operational-consumer-inventory }
+```
+
+Se completó únicamente el contrato fail-closed que faltaba para incorporar inventarios observados de jobs y webhooks al preflight combinado. El inspector inyectado debe devolver un inventario verificado; cualquier referencia observada a `mv_*` debe coincidir exactamente con un consumidor declarado como propio o externo aprobado y con justificación. El resultado preserva el inventario observado como evidencia operativa.
+
+La tarea global de la línea 67 permanece **`[ ]`**: este slice no completa todavía conteos/UUIDs/relaciones concretos ni el inventario RLS dentro de la evidencia preflight. No se modificó `tasks.md`.
+
+### TDD Cycle Evidence
+| Trabajo | Safety net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|
+| Jobs/webhooks observados | Catálogo+operativo 17/17 | El caso de job observado falló 1/14 porque el resultado no incluía `consumidoresObservados`. | La entrada combinada invoca el inspector, reconcilia referencias `mv_*` y devuelve la evidencia; 14/14. | Job propio clasificado aceptado y webhook externo no declarado rechazado antes de consultar invariantes; catálogo+operativo 18/18. | Se extrajo una única comprobación de clasificación exacta reutilizada por dependencias de catálogo, jobs y webhooks; 18/18. |
+
+### Work Unit Evidence
+| Evidencia | Resultado |
+|---|---|
+| Focused test | `npx vitest run src/compartido/pruebas/preflight-catalogo-family-app.test.ts src/compartido/pruebas/preflight-operativo-family-app.test.ts` — 2 archivos, 18/18 pasan. |
+| Runtime harness | `npx vitest run src/compartido/pruebas/preflight-operativo-family-app.test.ts` — la entrada combinada ejecuta el inspector observado: job clasificado aceptado y webhook sin clasificar bloqueado; 15/15 pasan. |
+| Rollback boundary | Revertir solo el tipo/guard/invocación de inventario observado en `preflight-operativo-family-app.ts`, sus dos escenarios enfocados y esta entrada de progreso; catálogo, migración, recuperación y runtime quedan intactos. |
+
+Verificación completa: `npm test` — 51 archivos pasan, 3 omitidos; 408 pasan, 23 omitidos. `npx tsc --noEmit --incremental false` y `git diff --check` pasan. No se ejecutó PostgreSQL ni se tocó Supabase compartido; Docker no está instalado en este entorno. Sin commit, push, PR, lifecycle command ni activación.

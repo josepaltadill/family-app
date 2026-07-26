@@ -41,6 +41,12 @@ const verificadorRecuperacion = vi.fn().mockResolvedValue({
   relacionesPreservadas: true,
 });
 
+const inspectorConsumidores = vi.fn().mockResolvedValue({
+  estado: 'inventario-verificado',
+  jobs: [{ identidad: 'job:family-app-reporter', referencia: 'mv_vehiculos' }],
+  webhooks: [],
+});
+
 describe('ejecutarPreflightOperativoFamiliar', () => {
   it('acepta una restauración demostrada, consumidores clasificados y todas las invariantes pre-corte', async () => {
     const cliente = clienteConInvariantes();
@@ -100,9 +106,20 @@ describe('ejecutarPreflightOperativoFamiliar', () => {
         { tabla_origen: 'mv_vehiculos', objeto_dependiente: 'job:family-app-reporter', clase_dependiente: '1259', oid_dependiente: '80', subobjeto_dependiente: '0', tipo_dependencia: 'n', clase_referencia: '1259', oid_referencia: '3', subobjeto_referencia: '0', definicion: 'family reporter' },
         { tabla_origen: 'mv_vehiculos', objeto_dependiente: 'indice_interno', clase_dependiente: '1259', oid_dependiente: '81', subobjeto_dependiente: '0', tipo_dependencia: 'i', clase_referencia: '1259', oid_referencia: '3', subobjeto_referencia: '0', definicion: 'internal index' },
       ] }) };
-    const resultado = await ejecutarPreflightFamiliar(catalogo, clienteConInvariantes(), evidenciaValida, verificadorRecuperacion);
+    const resultado = await ejecutarPreflightFamiliar(
+      catalogo,
+      clienteConInvariantes(),
+      evidenciaValida,
+      verificadorRecuperacion,
+      inspectorConsumidores,
+    );
     expect(resultado.catalogo.objetosOrigen).toHaveLength(5);
     expect(resultado.operativo.invariantes).toEqual(expect.objectContaining({ hogaresSinAdmin: 0 }));
+    expect(resultado.consumidoresObservados).toEqual({
+      estado: 'inventario-verificado',
+      jobs: [{ identidad: 'job:family-app-reporter', referencia: 'mv_vehiculos' }],
+      webhooks: [],
+    });
     expect(catalogo.query).toHaveBeenCalledTimes(3);
   });
 
@@ -117,7 +134,25 @@ describe('ejecutarPreflightOperativoFamiliar', () => {
 
     await expect(ejecutarPreflightFamiliar(catalogo, clienteConInvariantes(), {
       ...evidenciaValida, consumidoresExternos: [],
-    }, verificadorRecuperacion)).rejects.toThrow(/vista_otro_servicio/);
+    }, verificadorRecuperacion, inspectorConsumidores)).rejects.toThrow(/vista_otro_servicio/);
+  });
+
+  it('rechaza un webhook observado que referencia mv_* sin clasificación explícita', async () => {
+    const catalogo = { query: vi.fn()
+      .mockResolvedValueOnce({ rows: ['mv_households', 'mv_household_members', 'mv_platform_roles', 'mv_vehiculos', 'mv_eventos_vehiculo'].map((nombre, indice) => ({ nombre, oid: String(indice), propietario: 'postgres', definicion: [] })) })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] }) };
+    const operativo = clienteConInvariantes();
+    const inspectorWebhook = vi.fn().mockResolvedValue({
+      estado: 'inventario-verificado',
+      jobs: [],
+      webhooks: [{ identidad: 'webhook:other-app', referencia: 'mv_eventos_vehiculo' }],
+    });
+
+    await expect(ejecutarPreflightFamiliar(catalogo, operativo, {
+      ...evidenciaValida, consumidoresExternos: [],
+    }, verificadorRecuperacion, inspectorWebhook)).rejects.toThrow(/webhook:other-app/);
+    expect(operativo.query).not.toHaveBeenCalled();
   });
 
   it('no ejecuta las invariantes si el catálogo bloquea un conflicto final', async () => {
@@ -125,7 +160,13 @@ describe('ejecutarPreflightOperativoFamiliar', () => {
       .mockResolvedValueOnce({ rows: ['mv_households', 'mv_household_members', 'mv_platform_roles', 'mv_vehiculos', 'mv_eventos_vehiculo'].map((nombre, indice) => ({ nombre, oid: String(indice), propietario: 'postgres', definicion: [] })) })
       .mockResolvedValueOnce({ rows: [{ nombre: 'fam_hogares', oid: '99' }] }) };
     const operativo = clienteConInvariantes();
-    await expect(ejecutarPreflightFamiliar(catalogo, operativo, evidenciaValida, verificadorRecuperacion)).rejects.toThrow(/fam_hogares/);
+    await expect(ejecutarPreflightFamiliar(
+      catalogo,
+      operativo,
+      evidenciaValida,
+      verificadorRecuperacion,
+      inspectorConsumidores,
+    )).rejects.toThrow(/fam_hogares/);
     expect(operativo.query).not.toHaveBeenCalled();
   });
 });

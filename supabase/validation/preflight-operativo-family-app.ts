@@ -35,6 +35,16 @@ export type VerificadorRecuperacion = (backup: EvidenciaPreflightOperativo['back
   relacionesPreservadas: boolean;
 }>>;
 
+type ConsumidorObservado = Readonly<{ identidad: string; referencia: string }>;
+
+export type InventarioConsumidoresObservados = Readonly<{
+  estado: 'inventario-verificado';
+  jobs: readonly ConsumidorObservado[];
+  webhooks: readonly ConsumidorObservado[];
+}>;
+
+export type InspectorConsumidoresExternos = () => Promise<InventarioConsumidoresObservados>;
+
 export type ResultadoPreflightOperativo = Readonly<{
   backup: EvidenciaPreflightOperativo['backup'];
   consumidoresExternos: EvidenciaPreflightOperativo['consumidoresExternos'];
@@ -72,23 +82,46 @@ function exigirConsumidoresClasificados(consumidores: EvidenciaPreflightOperativ
   }
 }
 
+function estaClasificado(
+  identidad: string,
+  referencia: string,
+  consumidores: EvidenciaPreflightOperativo['consumidoresExternos'],
+) {
+  return consumidores.some((consumidor) => (
+    consumidor.identidad === identidad
+    && consumidor.referencia === referencia
+    && ['propio', 'externo-aprobado'].includes(consumidor.clasificacion)
+    && Boolean(consumidor.justificacion)
+  ));
+}
+
 function exigirDependenciasExternasClasificadas(
   inventario: InventarioCatalogoFamiliar,
   consumidores: EvidenciaPreflightOperativo['consumidoresExternos'],
 ) {
   const noClasificadas = inventario.dependencias
     .filter(({ tablaOrigen, tipoDependencia }) => tablaOrigen.startsWith('mv_') && tipoDependencia === 'n')
-    .filter(({ tablaOrigen, objetoDependiente }) => !consumidores.some(({ identidad, referencia, clasificacion, justificacion }) => (
-      identidad === objetoDependiente
-      && referencia === tablaOrigen
-      && ['propio', 'externo-aprobado'].includes(clasificacion)
-      && Boolean(justificacion)
-    )))
+    .filter(({ tablaOrigen, objetoDependiente }) => !estaClasificado(objetoDependiente, tablaOrigen, consumidores))
     .map(({ objetoDependiente }) => objetoDependiente)
     .filter((identidad, indice, identidades) => identidades.indexOf(identidad) === indice)
     .sort();
   if (noClasificadas.length > 0) {
     throw new Error(`Preflight operativo bloqueado: consumidores externos sin clasificar ${noClasificadas.join(', ')}`);
+  }
+}
+
+function exigirConsumidoresObservadosClasificados(
+  inventario: InventarioConsumidoresObservados,
+  consumidores: EvidenciaPreflightOperativo['consumidoresExternos'],
+) {
+  if (inventario.estado !== 'inventario-verificado') {
+    throw new Error('Preflight operativo bloqueado: falta inventario verificado de jobs y webhooks');
+  }
+  const noClasificados = [...inventario.jobs, ...inventario.webhooks]
+    .filter(({ referencia }) => referencia.startsWith('mv_'))
+    .filter(({ identidad, referencia }) => !estaClasificado(identidad, referencia, consumidores));
+  if (noClasificados.length > 0) {
+    throw new Error(`Preflight operativo bloqueado: jobs o webhooks sin clasificar ${noClasificados.map(({ identidad }) => identidad).join(', ')}`);
   }
 }
 
@@ -135,9 +168,12 @@ export async function ejecutarPreflightFamiliar(
   operativo: ClientePreflightOperativo,
   evidencia: EvidenciaPreflightOperativo,
   verificarRecuperacion: VerificadorRecuperacion,
+  inspeccionarConsumidores: InspectorConsumidoresExternos,
 ) {
   const inventarioCatalogo = await inspeccionarPreflightCatalogoFamiliar(catalogo);
   exigirDependenciasExternasClasificadas(inventarioCatalogo, evidencia.consumidoresExternos);
+  const consumidoresObservados = await inspeccionarConsumidores();
+  exigirConsumidoresObservadosClasificados(consumidoresObservados, evidencia.consumidoresExternos);
   const inventarioOperativo = await ejecutarPreflightOperativoFamiliar(operativo, evidencia, verificarRecuperacion);
-  return { catalogo: inventarioCatalogo, operativo: inventarioOperativo };
+  return { catalogo: inventarioCatalogo, operativo: inventarioOperativo, consumidoresObservados };
 }
