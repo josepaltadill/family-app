@@ -568,9 +568,10 @@ ejecutarPostgres('migración modular en PostgreSQL local efímero', () => {
             await cliente.query(`create function public.fam_es_miembro_hogar(text) returns boolean
               language sql as 'select true'`);
           } else {
-            await administradorDedicado.query(`create role ${ROL_DERIVA_OWNER_SQL} nologin;
-              grant ${ROL_DERIVA_OWNER_SQL} to ${ROL_RESTRINGIDO_SQL}`);
+            await administradorDedicado.query(`create role ${ROL_DERIVA_OWNER_SQL} nologin`);
             rolDerivaCreado = true;
+            await administradorDedicado.query(`grant ${ROL_DERIVA_OWNER_SQL} to ${ROL_RESTRINGIDO_SQL};
+              grant create on schema public to ${ROL_DERIVA_OWNER_SQL}`);
             migracionEjecutable = migracionEjecutable.replace(
               'alter function public.mv_es_miembro(uuid) rename to fam_es_miembro_hogar;',
               `alter function public.mv_es_miembro(uuid) rename to fam_es_miembro_hogar;
@@ -590,7 +591,8 @@ ejecutarPostgres('migración modular en PostgreSQL local efímero', () => {
           expect(contrato.rows[0]).toEqual({ origen: 5, final: 0 });
         } finally {
           if (rolDerivaCreado) {
-            await administradorDedicado.query(`revoke ${ROL_DERIVA_OWNER_SQL} from ${ROL_RESTRINGIDO_SQL};
+            await administradorDedicado.query(`revoke create on schema public from ${ROL_DERIVA_OWNER_SQL};
+              revoke ${ROL_DERIVA_OWNER_SQL} from ${ROL_RESTRINGIDO_SQL};
               drop role ${ROL_DERIVA_OWNER_SQL}`);
           }
         }
