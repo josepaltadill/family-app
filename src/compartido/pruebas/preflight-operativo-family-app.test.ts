@@ -66,6 +66,22 @@ const inventarioRls = {
 
 const inspectorRls = vi.fn().mockResolvedValue(inventarioRls);
 
+const inventarioDatos = {
+  estado: 'inventario-verificado',
+  tablas: tablasRls.map((tabla, indice) => ({
+    tabla,
+    conteoFilas: indice + 1,
+    conteoIdentidadesUuid: indice + 1,
+    hashIdentidadesSha256: String(indice).repeat(64),
+  })),
+  relaciones: [
+    { relacion: 'hogar-miembro', conteo: 2, hashSha256: 'a'.repeat(64) },
+    { relacion: 'vehiculo-evento', conteo: 5, hashSha256: 'b'.repeat(64) },
+  ],
+} as const;
+
+const inspectorDatos = vi.fn().mockResolvedValue(inventarioDatos);
+
 describe('ejecutarPreflightOperativoFamiliar', () => {
   it('acepta una restauración demostrada, consumidores clasificados y todas las invariantes pre-corte', async () => {
     const cliente = clienteConInvariantes();
@@ -132,6 +148,7 @@ describe('ejecutarPreflightOperativoFamiliar', () => {
       verificadorRecuperacion,
       inspectorConsumidores,
       inspectorRls,
+      inspectorDatos,
     );
     expect(resultado.catalogo.objetosOrigen).toHaveLength(5);
     expect(resultado.operativo.invariantes).toEqual(expect.objectContaining({ hogaresSinAdmin: 0 }));
@@ -145,7 +162,9 @@ describe('ejecutarPreflightOperativoFamiliar', () => {
       tablasRls.map((tabla) => ({ tabla, rlsHabilitado: true })),
     );
     expect(resultado.rlsObservado).toEqual(inventarioRls);
+    expect(resultado.datosObservados).toEqual(inventarioDatos);
     expect(inspectorRls).toHaveBeenCalledTimes(1);
+    expect(inspectorDatos).toHaveBeenCalledTimes(1);
     expect(catalogo.query).toHaveBeenCalledTimes(3);
   });
 
@@ -160,7 +179,7 @@ describe('ejecutarPreflightOperativoFamiliar', () => {
 
     await expect(ejecutarPreflightFamiliar(catalogo, clienteConInvariantes(), {
       ...evidenciaValida, consumidoresExternos: [],
-    }, verificadorRecuperacion, inspectorConsumidores, inspectorRls)).rejects.toThrow(/vista_otro_servicio/);
+    }, verificadorRecuperacion, inspectorConsumidores, inspectorRls, inspectorDatos)).rejects.toThrow(/vista_otro_servicio/);
   });
 
   it('rechaza un webhook observado que referencia mv_* sin clasificación explícita', async () => {
@@ -177,7 +196,7 @@ describe('ejecutarPreflightOperativoFamiliar', () => {
 
     await expect(ejecutarPreflightFamiliar(catalogo, operativo, {
       ...evidenciaValida, consumidoresExternos: [],
-    }, verificadorRecuperacion, inspectorWebhook, inspectorRls)).rejects.toThrow(/webhook:other-app/);
+    }, verificadorRecuperacion, inspectorWebhook, inspectorRls, inspectorDatos)).rejects.toThrow(/webhook:other-app/);
     expect(operativo.query).not.toHaveBeenCalled();
   });
 
@@ -195,8 +214,28 @@ describe('ejecutarPreflightOperativoFamiliar', () => {
     });
 
     await expect(ejecutarPreflightFamiliar(
-      catalogo, clienteConInvariantes(), evidenciaValida, verificadorRecuperacion, inspectorConsumidores, inspeccionarRls,
+      catalogo, clienteConInvariantes(), evidenciaValida, verificadorRecuperacion, inspectorConsumidores, inspeccionarRls, inspectorDatos,
     )).rejects.toThrow(mensaje);
+  });
+
+  it.each([
+    ['falta una tabla', { ...inventarioDatos, tablas: inventarioDatos.tablas.slice(1) }, /mv_households/],
+    ['el conteo no coincide con las identidades UUID', { ...inventarioDatos, tablas: inventarioDatos.tablas.map((tabla) => tabla.tabla === 'mv_vehiculos' ? { ...tabla, conteoIdentidadesUuid: 0 } : tabla) }, /mv_vehiculos/],
+    ['el hash UUID no es SHA-256', { ...inventarioDatos, tablas: inventarioDatos.tablas.map((tabla) => tabla.tabla === 'mv_platform_roles' ? { ...tabla, hashIdentidadesSha256: '' } : tabla) }, /mv_platform_roles/],
+    ['falta una relación', { ...inventarioDatos, relaciones: inventarioDatos.relaciones.slice(1) }, /hogar-miembro/],
+    ['una relación omite filas hijas', { ...inventarioDatos, relaciones: inventarioDatos.relaciones.map((relacion) => relacion.relacion === 'hogar-miembro' ? { ...relacion, conteo: 1 } : relacion) }, /hogar-miembro/],
+  ])('rechaza la evidencia de datos cuando %s', async (_caso, inventario, mensaje) => {
+    const catalogo = { query: vi.fn()
+      .mockResolvedValueOnce({ rows: tablasRls.map((nombre, indice) => ({ nombre, oid: String(indice), propietario: 'postgres', definicion: [] })) })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] }) };
+    const operativo = clienteConInvariantes();
+    const inspeccionarDatos = vi.fn().mockResolvedValue(inventario);
+
+    await expect(ejecutarPreflightFamiliar(
+      catalogo, operativo, evidenciaValida, verificadorRecuperacion, inspectorConsumidores, inspectorRls, inspeccionarDatos,
+    )).rejects.toThrow(mensaje);
+    expect(operativo.query).not.toHaveBeenCalled();
   });
 
   it('no ejecuta las invariantes si el catálogo bloquea un conflicto final', async () => {
@@ -211,6 +250,7 @@ describe('ejecutarPreflightOperativoFamiliar', () => {
       verificadorRecuperacion,
       inspectorConsumidores,
       inspectorRls,
+      inspectorDatos,
     )).rejects.toThrow(/fam_hogares/);
     expect(operativo.query).not.toHaveBeenCalled();
   });

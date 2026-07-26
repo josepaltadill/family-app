@@ -62,13 +62,36 @@ export type InventarioRlsObservado = Readonly<{
 
 export type InspectorRls = () => Promise<InventarioRlsObservado>;
 
-const TABLAS_RLS_ESPERADAS = [
+export type InventarioDatosObservado = Readonly<{
+  estado: 'inventario-verificado';
+  tablas: ReadonlyArray<Readonly<{
+    tabla: string;
+    conteoFilas: number;
+    conteoIdentidadesUuid: number;
+    hashIdentidadesSha256: string;
+  }>>;
+  relaciones: ReadonlyArray<Readonly<{
+    relacion: string;
+    conteo: number;
+    hashSha256: string;
+  }>>;
+}>;
+
+export type InspectorDatos = () => Promise<InventarioDatosObservado>;
+
+const TABLAS_ORIGEN_ESPERADAS = [
   'mv_households',
   'mv_household_members',
   'mv_platform_roles',
   'mv_vehiculos',
   'mv_eventos_vehiculo',
 ] as const;
+
+const RELACIONES_ESPERADAS = ['hogar-miembro', 'vehiculo-evento'] as const;
+const TABLA_HIJA_POR_RELACION = {
+  'hogar-miembro': 'mv_household_members',
+  'vehiculo-evento': 'mv_eventos_vehiculo',
+} as const;
 
 export type ResultadoPreflightOperativo = Readonly<{
   backup: EvidenciaPreflightOperativo['backup'];
@@ -155,15 +178,59 @@ function exigirInventarioRlsCompleto(inventario: InventarioRlsObservado) {
     throw new Error('Preflight operativo bloqueado: falta inventario RLS verificado');
   }
   const tablasPorNombre = new Map(inventario.tablas.map((tabla) => [tabla.tabla, tabla]));
-  const invalidas = TABLAS_RLS_ESPERADAS.filter((tabla) => (
+  const invalidas = TABLAS_ORIGEN_ESPERADAS.filter((tabla) => (
     inventario.tablas.filter(({ tabla: nombre }) => nombre === tabla).length !== 1
     || !tablasPorNombre.get(tabla)?.rlsHabilitado
     || !Array.isArray(tablasPorNombre.get(tabla)?.politicas)
   ));
   const inesperadas = [...tablasPorNombre.keys()]
-    .filter((tabla) => !TABLAS_RLS_ESPERADAS.includes(tabla as typeof TABLAS_RLS_ESPERADAS[number]));
+    .filter((tabla) => !TABLAS_ORIGEN_ESPERADAS.includes(tabla as typeof TABLAS_ORIGEN_ESPERADAS[number]));
   if (invalidas.length > 0 || inesperadas.length > 0) {
     throw new Error(`Preflight operativo bloqueado: inventario RLS incompleto ${[...invalidas, ...inesperadas].join(', ')}`);
+  }
+}
+
+function esConteo(cantidad: number) {
+  return Number.isSafeInteger(cantidad) && cantidad >= 0;
+}
+
+function esHashSha256(hash: string) {
+  return /^[a-f0-9]{64}$/i.test(hash);
+}
+
+function exigirInventarioDatosCompleto(inventario: InventarioDatosObservado) {
+  if (inventario.estado !== 'inventario-verificado'
+    || !Array.isArray(inventario.tablas)
+    || !Array.isArray(inventario.relaciones)) {
+    throw new Error('Preflight operativo bloqueado: falta inventario verificado de datos');
+  }
+  const tablasPorNombre = new Map(inventario.tablas.map((tabla) => [tabla.tabla, tabla]));
+  const tablasInvalidas = TABLAS_ORIGEN_ESPERADAS.filter((nombre) => {
+    const tablas = inventario.tablas.filter(({ tabla }) => tabla === nombre);
+    const tabla = tablas[0];
+    return tablas.length !== 1 || !tabla
+      || !esConteo(tabla.conteoFilas)
+      || tabla.conteoIdentidadesUuid !== tabla.conteoFilas
+      || !esHashSha256(tabla.hashIdentidadesSha256);
+  });
+  const tablasInesperadas = inventario.tablas
+    .map(({ tabla }) => tabla)
+    .filter((tabla) => !TABLAS_ORIGEN_ESPERADAS.includes(tabla as typeof TABLAS_ORIGEN_ESPERADAS[number]));
+  const relacionesInvalidas = RELACIONES_ESPERADAS.filter((nombre) => {
+    const relaciones = inventario.relaciones.filter(({ relacion }) => relacion === nombre);
+    const relacion = relaciones[0];
+    const conteoFilasHijas = tablasPorNombre.get(TABLA_HIJA_POR_RELACION[nombre])?.conteoFilas;
+    return relaciones.length !== 1 || !relacion
+      || !esConteo(relacion.conteo)
+      || relacion.conteo !== conteoFilasHijas
+      || !esHashSha256(relacion.hashSha256);
+  });
+  const relacionesInesperadas = inventario.relaciones
+    .map(({ relacion }) => relacion)
+    .filter((relacion) => !RELACIONES_ESPERADAS.includes(relacion as typeof RELACIONES_ESPERADAS[number]));
+  const invalidos = [...tablasInvalidas, ...tablasInesperadas, ...relacionesInvalidas, ...relacionesInesperadas];
+  if (invalidos.length > 0) {
+    throw new Error(`Preflight operativo bloqueado: inventario de datos incompleto ${invalidos.join(', ')}`);
   }
 }
 
@@ -212,6 +279,7 @@ export async function ejecutarPreflightFamiliar(
   verificarRecuperacion: VerificadorRecuperacion,
   inspeccionarConsumidores: InspectorConsumidoresExternos,
   inspeccionarRls: InspectorRls,
+  inspeccionarDatos: InspectorDatos,
 ) {
   const inventarioCatalogo = await inspeccionarPreflightCatalogoFamiliar(catalogo);
   exigirDependenciasExternasClasificadas(inventarioCatalogo, evidencia.consumidoresExternos);
@@ -219,6 +287,8 @@ export async function ejecutarPreflightFamiliar(
   exigirConsumidoresObservadosClasificados(consumidoresObservados, evidencia.consumidoresExternos);
   const rlsObservado = await inspeccionarRls();
   exigirInventarioRlsCompleto(rlsObservado);
+  const datosObservados = await inspeccionarDatos();
+  exigirInventarioDatosCompleto(datosObservados);
   const inventarioOperativo = await ejecutarPreflightOperativoFamiliar(operativo, evidencia, verificarRecuperacion);
-  return { catalogo: inventarioCatalogo, operativo: inventarioOperativo, consumidoresObservados, rlsObservado };
+  return { catalogo: inventarioCatalogo, operativo: inventarioOperativo, consumidoresObservados, rlsObservado, datosObservados };
 }

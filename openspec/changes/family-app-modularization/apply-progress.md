@@ -940,3 +940,34 @@ La tarea global de la línea 67 permanece **`[ ]`**: los slices publicados cubre
 | Rollback boundary | Revertir el tipo/guard/invocación `InspectorRls` en `preflight-operativo-family-app.ts`, sus tres expectativas enfocadas y esta entrada; catálogo, migración, recuperación, jobs/webhooks y runtime permanecen intactos. |
 
 Verificación completa: `npm test` — 51 archivos pasan, 3 omitidos; 410 pasan, 23 omitidos. `npx tsc --noEmit --incremental false` y `git diff --check` pasan. No se ejecutó PostgreSQL ni se tocó Supabase compartido. Sin commit, push, PR, lifecycle command ni activación.
+
+---
+
+## PR 2 — evidencia observada de datos preflight
+
+### Estado y límite
+```yaml
+schemaName: gentle-ai.sdd-status
+changeName: family-app-modularization
+artifactStore: both
+applyState: ready
+delivery: { strategy: feature-branch-chain, boundary: PR-2-operational-data-inventory }
+```
+
+Se completó el último aspecto pendiente de la línea 67 mediante un único contrato fail-closed de datos observados. El inspector debe aportar exactamente las cinco tablas origen con conteo de filas, conteo equivalente de identidades UUID y hash SHA-256 estable, además de las relaciones `hogar-miembro` y `vehiculo-evento` con conteo y hash SHA-256. Tablas o relaciones ausentes, duplicadas, inesperadas, conteos inválidos, identidades incompletas o hashes inválidos bloquean antes de consultar invariantes.
+
+La línea 67 queda **`[x]`** porque la implementación acumulada ya cubre backup restaurable, OID/definiciones/dependencias, conteos/UUIDs/relaciones, RLS, jobs, webhooks y consumidores externos. No se entra en la línea 68 ni en tareas TRIANGULATE, PR 3, PR 4 o gates parent-owned.
+
+### TDD Cycle Evidence
+| Trabajo | Safety net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|
+| Datos observados | Catálogo+operativo 20/20 | El contrato inicial produjo 5 fallos/21; un segundo RED produjo 1 fallo/22 al aceptar una relación con menos filas hijas. | La entrada combinada invoca el inspector, valida el inventario completo y exige que cada relación cubra todas sus filas hijas; 22/22. | Los cinco casos inseguros ejercen rutas distintas; catálogo+operativo 25/25. | Se consolidaron la lista de tablas y el mapa relación→tabla hija; 25/25 después del refactor. |
+
+### Work Unit Evidence
+| Evidencia | Resultado |
+|---|---|
+| Focused test | `npx vitest run src/compartido/pruebas/preflight-catalogo-family-app.test.ts src/compartido/pruebas/preflight-operativo-family-app.test.ts` — 2 archivos, 25/25 pasan. |
+| Runtime harness | `npx vitest run src/compartido/pruebas/preflight-operativo-family-app.test.ts` — la entrada combinada ejecuta el inspector y bloquea evidencia concreta incompleta; 22/22 pasan. No requiere PostgreSQL: este work unit define el contrato del inspector inyectado y no consulta una base compartida. |
+| Rollback boundary | Revertir `InventarioDatosObservado`/`InspectorDatos`, su guard e invocación en `preflight-operativo-family-app.ts`, los cinco escenarios enfocados, la checkbox de línea 67 y esta entrada; los slices previos permanecen intactos. |
+
+Verificación completa: `npm test` — 51 archivos pasan, 3 omitidos; 415 pasan, 23 omitidos. `npx tsc --noEmit --incremental false` y `git diff --check` pasan. Sin desviación de diseño, PostgreSQL, Supabase compartido, commit, push, PR, lifecycle command ni activación.
