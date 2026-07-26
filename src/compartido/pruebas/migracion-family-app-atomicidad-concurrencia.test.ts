@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { Client } from 'pg';
 import { describe, expect, it } from 'vitest';
 
-const BASE_DEDICADA = 'family_app_modularization_test_review_da7a7c22062311e6';
+const BASE_DEDICADA = 'family_app_atomicity_test_review_da7a7c22062311e6';
 const URL_BOOTSTRAP = process.env.SUPABASE_BOOTSTRAP_DATABASE_URL;
 const ejecutarPostgres = URL_BOOTSTRAP ? describe : describe.skip;
 const rutaMigracion = new URL('../../../supabase/migrations/20260713000000_family_app_modularization.sql', import.meta.url);
